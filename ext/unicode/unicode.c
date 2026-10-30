@@ -15,6 +15,7 @@
 #  include "rubyio.h"
 #endif
 #include <stdio.h>
+#include <stdlib.h>
 #include "wstring.h"
 #include "unidata.map"
 
@@ -52,8 +53,6 @@ taintObject(VALUE src, VALUE obj) {
 #endif
 
 static VALUE mUnicode;
-static VALUE unicode_data;
-static VALUE composition_table;
 static VALUE catname_long[c_Cn+1];
 static VALUE catname_abbr[c_Cn+1];
 
@@ -68,196 +67,254 @@ static VALUE catname_abbr[c_Cn+1];
 #define NCOUNT  (VCOUNT * TCOUNT) /* 588 */
 #define SCOUNT  (LCOUNT * NCOUNT) /* 11172 */
 
-VALUE
-get_unidata(int ucs) {
-  VALUE ch = rb_hash_aref(unicode_data, INT2FIX(ucs));
-  if (!NIL_P(ch))
-    return ch;
+/*
+ * Character data lookups.
+ *
+ * unidata[] (unidata.map) is static, sorted by code in strictly ascending order, and ends with a
+ * -1 sentinel. bmp_index and composition_pairs are built once by Init_unicode_native and never
+ * change after that. No lookup calls the Ruby API, allocates, or raises, so lookups are safe while
+ * native buffers are live, and none of this data is a Ruby object or a GC root.
+ */
+
+#define UNIDATA_COUNT (sizeof(unidata) / sizeof(unidata[0]) - 1)
+#define BMP_SIZE 0x10000
+
+_Static_assert(sizeof(unidata) / sizeof(unidata[0]) <= 0xFFFF, "bmp_index stores entry positions plus one in 16 bits");
+
+/* For each codepoint below U+10000, its unidata[] position plus one, or 0 when it has no entry. */
+static unsigned short bmp_index[BMP_SIZE];
+
+struct composition_pair {
+  int first;
+  int second;
+  int composite;
+};
+
+static struct composition_pair* composition_pairs;
+static size_t composition_pair_count;
+
+static const struct unicode_data*
+find_unidata(int ucs)
+{
+  size_t low = 0;
+  size_t high = UNIDATA_COUNT;
+
+  if (ucs >= 0 && ucs < BMP_SIZE)
+    return bmp_index[ucs] ? &unidata[bmp_index[ucs] - 1] : NULL;
+
+  while (low < high) {
+    size_t middle = low + (high - low) / 2;
+    int code = unidata[middle].code;
+
+    if (code == ucs)
+      return &unidata[middle];
+    if (code < ucs)
+      low = middle + 1;
+    else
+      high = middle;
+  }
+  return NULL;
+}
+
+/*
+ * Like find_unidata, but a character inside a range that UnicodeData.txt lists only by its first
+ * and last code (CJK ideographs, Hangul syllables, surrogates, private use) gets the range's entry.
+ */
+static const struct unicode_data*
+find_unidata_in_ranges(int ucs)
+{
+  const struct unicode_data* data = find_unidata(ucs);
+
+  if (data)
+    return data;
 #ifdef CJK_IDEOGRAPH_EXTENSION_A_FIRST
-  else if (ucs >= CJK_IDEOGRAPH_EXTENSION_A_FIRST &&
-           ucs <= CJK_IDEOGRAPH_EXTENSION_A_LAST)
-    return rb_hash_aref(unicode_data,
-                        INT2FIX(CJK_IDEOGRAPH_EXTENSION_A_FIRST));
+  if (ucs >= CJK_IDEOGRAPH_EXTENSION_A_FIRST && ucs <= CJK_IDEOGRAPH_EXTENSION_A_LAST)
+    return find_unidata(CJK_IDEOGRAPH_EXTENSION_A_FIRST);
 #endif
 #ifdef CJK_IDEOGRAPH_FIRST
-  else if (ucs >= CJK_IDEOGRAPH_FIRST &&
-           ucs <= CJK_IDEOGRAPH_LAST)
-    return rb_hash_aref(unicode_data,
-                        INT2FIX(CJK_IDEOGRAPH_FIRST));
+  if (ucs >= CJK_IDEOGRAPH_FIRST && ucs <= CJK_IDEOGRAPH_LAST)
+    return find_unidata(CJK_IDEOGRAPH_FIRST);
 #endif
 #ifdef HANGUL_SYLLABLE_FIRST
-  else if (ucs >= HANGUL_SYLLABLE_FIRST &&
-           ucs <= HANGUL_SYLLABLE_LAST)
-    return rb_hash_aref(unicode_data,
-                        INT2FIX(HANGUL_SYLLABLE_FIRST));
+  if (ucs >= HANGUL_SYLLABLE_FIRST && ucs <= HANGUL_SYLLABLE_LAST)
+    return find_unidata(HANGUL_SYLLABLE_FIRST);
 #endif
 #ifdef NON_PRIVATE_USE_HIGH_SURROGATE_FIRST
-  else if (ucs >= NON_PRIVATE_USE_HIGH_SURROGATE_FIRST &&
-           ucs <= NON_PRIVATE_USE_HIGH_SURROGATE_LAST)
-    return rb_hash_aref(unicode_data,
-                        INT2FIX(NON_PRIVATE_USE_HIGH_SURROGATE_FIRST));
+  if (ucs >= NON_PRIVATE_USE_HIGH_SURROGATE_FIRST && ucs <= NON_PRIVATE_USE_HIGH_SURROGATE_LAST)
+    return find_unidata(NON_PRIVATE_USE_HIGH_SURROGATE_FIRST);
 #endif
 #ifdef PRIVATE_USE_HIGH_SURROGATE_FIRST
-  else if (ucs >= PRIVATE_USE_HIGH_SURROGATE_FIRST &&
-           ucs <= PRIVATE_USE_HIGH_SURROGATE_LAST)
-    return rb_hash_aref(unicode_data,
-                        INT2FIX(PRIVATE_USE_HIGH_SURROGATE_FIRST));
+  if (ucs >= PRIVATE_USE_HIGH_SURROGATE_FIRST && ucs <= PRIVATE_USE_HIGH_SURROGATE_LAST)
+    return find_unidata(PRIVATE_USE_HIGH_SURROGATE_FIRST);
 #endif
 #ifdef LOW_SURROGATE_FIRST
-  else if (ucs >= LOW_SURROGATE_FIRST &&
-           ucs <= LOW_SURROGATE_LAST)
-    return rb_hash_aref(unicode_data,
-                        INT2FIX(LOW_SURROGATE_FIRST));
+  if (ucs >= LOW_SURROGATE_FIRST && ucs <= LOW_SURROGATE_LAST)
+    return find_unidata(LOW_SURROGATE_FIRST);
 #endif
 #ifdef PRIVATE_USE_FIRST
-  else if (ucs >= PRIVATE_USE_FIRST &&
-           ucs <= PRIVATE_USE_LAST)
-    return rb_hash_aref(unicode_data,
-                        INT2FIX(PRIVATE_USE_FIRST));
+  if (ucs >= PRIVATE_USE_FIRST && ucs <= PRIVATE_USE_LAST)
+    return find_unidata(PRIVATE_USE_FIRST);
 #endif
 #ifdef CJK_IDEOGRAPH_EXTENSION_B_FIRST
-  else if (ucs >= CJK_IDEOGRAPH_EXTENSION_B_FIRST &&
-           ucs <= CJK_IDEOGRAPH_EXTENSION_B_LAST)
-    return rb_hash_aref(unicode_data,
-                        INT2FIX(CJK_IDEOGRAPH_EXTENSION_B_FIRST));
+  if (ucs >= CJK_IDEOGRAPH_EXTENSION_B_FIRST && ucs <= CJK_IDEOGRAPH_EXTENSION_B_LAST)
+    return find_unidata(CJK_IDEOGRAPH_EXTENSION_B_FIRST);
 #endif
 #ifdef CJK_IDEOGRAPH_EXTENSION_C_FIRST
-  else if (ucs >= CJK_IDEOGRAPH_EXTENSION_C_FIRST &&
-           ucs <= CJK_IDEOGRAPH_EXTENSION_C_LAST)
-    return rb_hash_aref(unicode_data,
-                        INT2FIX(CJK_IDEOGRAPH_EXTENSION_C_FIRST));
+  if (ucs >= CJK_IDEOGRAPH_EXTENSION_C_FIRST && ucs <= CJK_IDEOGRAPH_EXTENSION_C_LAST)
+    return find_unidata(CJK_IDEOGRAPH_EXTENSION_C_FIRST);
 #endif
 #ifdef CJK_IDEOGRAPH_EXTENSION_D_FIRST
-  else if (ucs >= CJK_IDEOGRAPH_EXTENSION_D_FIRST &&
-           ucs <= CJK_IDEOGRAPH_EXTENSION_D_LAST)
-    return rb_hash_aref(unicode_data,
-                        INT2FIX(CJK_IDEOGRAPH_EXTENSION_D_FIRST));
+  if (ucs >= CJK_IDEOGRAPH_EXTENSION_D_FIRST && ucs <= CJK_IDEOGRAPH_EXTENSION_D_LAST)
+    return find_unidata(CJK_IDEOGRAPH_EXTENSION_D_FIRST);
 #endif
 #ifdef PLANE_15_PRIVATE_USE_FIRST
-  else if (ucs >= PLANE_15_PRIVATE_USE_FIRST &&
-           ucs <= PLANE_15_PRIVATE_USE_LAST)
-    return rb_hash_aref(unicode_data,
-                        INT2FIX(PLANE_15_PRIVATE_USE_FIRST));
+  if (ucs >= PLANE_15_PRIVATE_USE_FIRST && ucs <= PLANE_15_PRIVATE_USE_LAST)
+    return find_unidata(PLANE_15_PRIVATE_USE_FIRST);
 #endif
 #ifdef PLANE_16_PRIVATE_USE_FIRST
-  else if (ucs >= PLANE_16_PRIVATE_USE_FIRST &&
-           ucs <= PLANE_16_PRIVATE_USE_LAST)
-    return rb_hash_aref(unicode_data,
-                        INT2FIX(PLANE_16_PRIVATE_USE_FIRST));
+  if (ucs >= PLANE_16_PRIVATE_USE_FIRST && ucs <= PLANE_16_PRIVATE_USE_LAST)
+    return find_unidata(PLANE_16_PRIVATE_USE_FIRST);
 #endif
-  return Qnil;
+  return NULL;
 }
 
 static int
 get_cc(int ucs)
 {
-  VALUE ch = rb_hash_aref(unicode_data, INT2FIX(ucs));
+  const struct unicode_data* data = find_unidata(ucs);
 
-  if (!NIL_P(ch)) {
-    return unidata[FIX2INT(ch)].combining_class;
-  }
-  return 0;
+  return data ? data->combining_class : 0;
 }
 
 static int
 get_gencat(int ucs)
 {
-  VALUE ch = get_unidata(ucs);
+  const struct unicode_data* data = find_unidata_in_ranges(ucs);
 
-  if (!NIL_P(ch)) {
-    return unidata[FIX2INT(ch)].general_category;
-  }
-  return c_Cn; /* Unassigned */
+  return data ? data->general_category : c_Cn; /* Unassigned */
 }
 
 static int
 get_eawidth(int ucs)
 {
-  VALUE ch = get_unidata(ucs);
+  const struct unicode_data* data = find_unidata_in_ranges(ucs);
 
-  if (!NIL_P(ch)) {
-    return unidata[FIX2INT(ch)].east_asian_width;
-  }
-  return w_N; /* Neutral */
+  return data ? data->east_asian_width : w_N; /* Neutral */
 }
 
 static const char*
 get_canon(int ucs)
 {
-  VALUE ch = rb_hash_aref(unicode_data, INT2FIX(ucs));
+  const struct unicode_data* data = find_unidata(ucs);
 
-  if (!NIL_P(ch)) {
-    return unidata[FIX2INT(ch)].canon;
-  }
-  return NULL;
+  return data ? data->canon : NULL;
 }
 
 static const char*
 get_canon_ex(int ucs)
 {
-  VALUE ch = rb_hash_aref(unicode_data, INT2FIX(ucs));
+  const struct unicode_data* data = find_unidata(ucs);
 
-  if (!NIL_P(ch)) {
-    int i = FIX2INT(ch);
-    if (!unidata[i].exclusion)
-      return unidata[i].canon;
-  }
-  return NULL;
+  return data && !data->exclusion ? data->canon : NULL;
 }
 
 static const char*
 get_compat(int ucs)
 {
-  VALUE ch = rb_hash_aref(unicode_data, INT2FIX(ucs));
+  const struct unicode_data* data = find_unidata(ucs);
 
-  if (!NIL_P(ch)) {
-    return unidata[FIX2INT(ch)].compat;
-  }
-  return NULL;
+  return data ? data->compat : NULL;
 }
 
 static const char*
 get_uppercase(int ucs)
 {
-  VALUE ch = rb_hash_aref(unicode_data, INT2FIX(ucs));
+  const struct unicode_data* data = find_unidata(ucs);
 
-  if (!NIL_P(ch)) {
-    return unidata[FIX2INT(ch)].uppercase;
-  }
-  return NULL;
+  return data ? data->uppercase : NULL;
 }
 
 static const char*
 get_lowercase(int ucs)
 {
-  VALUE ch = rb_hash_aref(unicode_data, INT2FIX(ucs));
+  const struct unicode_data* data = find_unidata(ucs);
 
-  if (!NIL_P(ch)) {
-    return unidata[FIX2INT(ch)].lowercase;
-  }
-  return NULL;
+  return data ? data->lowercase : NULL;
 }
 
 static const char*
 get_titlecase(int ucs)
 {
-  VALUE ch = rb_hash_aref(unicode_data, INT2FIX(ucs));
+  const struct unicode_data* data = find_unidata(ucs);
 
-  if (!NIL_P(ch)) {
-    return unidata[FIX2INT(ch)].titlecase;
-  }
-  return NULL;
+  return data ? data->titlecase : NULL;
+}
+
+static void
+build_bmp_index(void)
+{
+  size_t i;
+
+  for (i = 0; i < UNIDATA_COUNT && unidata[i].code < BMP_SIZE; i++)
+    bmp_index[unidata[i].code] = (unsigned short)(i + 1);
 }
 
 static int
-get_composition(const char* str)
+compare_composition_pairs(const void* left, const void* right)
 {
-  VALUE ch = rb_hash_aref(composition_table, rb_str_new2(str));
+  const struct composition_pair* a = left;
+  const struct composition_pair* b = right;
 
-  if (!NIL_P(ch)) {
-    return FIX2INT(ch);
+  if (a->first != b->first)
+    return a->first < b->first ? -1 : 1;
+  if (a->second != b->second)
+    return a->second < b->second ? -1 : 1;
+  return 0;
+}
+
+static int
+get_composition(int first, int second)
+{
+  struct composition_pair key = { first, second, 0 };
+  const struct composition_pair* pair =
+    bsearch(&key, composition_pairs, composition_pair_count, sizeof(key), compare_composition_pairs);
+
+  return pair ? pair->composite : -1;
+}
+
+/*
+ * Every canonical decomposition that may be recomposed (no composition exclusion) is exactly two
+ * codepoints in Unicode 6.2; compose_pair only ever asks about two, so any other length is skipped.
+ * The table is allocated once and kept for the life of the process. ALLOC_N raises NoMemoryError
+ * before anything is assigned, so a failure here leaves nothing half-built.
+ */
+static void
+build_composition_pairs(void)
+{
+  size_t i;
+  size_t capacity = 0;
+
+  for (i = 0; i < UNIDATA_COUNT; i++) {
+    if (unidata[i].canon && !unidata[i].exclusion)
+      capacity++;
   }
-  return -1;
+
+  composition_pairs = ALLOC_N(struct composition_pair, capacity);
+  for (i = 0; i < UNIDATA_COUNT; i++) {
+    WString decomposition;
+
+    if (!unidata[i].canon || unidata[i].exclusion)
+      continue;
+    WStr_allocWithUTF8(&decomposition, unidata[i].canon);
+    if (decomposition.len == 2) {
+      composition_pairs[composition_pair_count].first = decomposition.str[0];
+      composition_pairs[composition_pair_count].second = decomposition.str[1];
+      composition_pairs[composition_pair_count].composite = unidata[i].code;
+      composition_pair_count++;
+    }
+    WStr_free(&decomposition);
+  }
+  qsort(composition_pairs, composition_pair_count, sizeof(struct composition_pair), compare_composition_pairs);
 }
 
 static WString*
@@ -403,50 +460,9 @@ decompose_compat_internal(WString* ustr, WString* result)
 }
 
 
-#define UCS4toUTF8(p, c) \
-  do { \
-    if (c < 128) { \
-      *p++ = c; \
-    } \
-    else if (c < 2048) { \
-      *p++ = (c >> 6) | 192; \
-      *p++ = (c & 63) | 128; \
-    } \
-    else if (c < 0x10000) { \
-      *p++ = (c >> 12) | 224; \
-      *p++ = ((c >> 6) & 63) | 128; \
-      *p++ = (c & 63) | 128; \
-    } \
-    else if (c < 0x200000) { \
-      *p++ = (c >> 18) | 240; \
-      *p++ = ((c >> 12) & 63) | 128; \
-      *p++ = ((c >> 6) & 63) | 128; \
-      *p++ = (c & 63) | 128; \
-    } \
-    else if (c < 0x4000000) { \
-      *p++ = (c >> 24) | 248; \
-      *p++ = ((c >> 18) & 63) | 128; \
-      *p++ = ((c >> 12) & 63) | 128; \
-      *p++ = ((c >> 6) & 63) | 128; \
-      *p++ = (c & 63) | 128; \
-    } \
-    else if (c < 0x80000000) { \
-      *p++ = (c >> 30) | 252; \
-      *p++ = ((c >> 24) & 63) | 128; \
-      *p++ = ((c >> 18) & 63) | 128; \
-      *p++ = ((c >> 12) & 63) | 128; \
-      *p++ = ((c >> 6) & 63) | 128; \
-      *p++ = (c & 63) | 128; \
-    } \
-  } while (0)
-
 static int
 compose_pair(unsigned int c1, unsigned int c2)
 {
-  int ret;
-  char ustr[13]; /* stored two UTF-8 chars */
-  char *p = ustr;
-
   /* Hangul L + V */
   if (c1 >= LBASE && c1 < LBASE + LCOUNT &&
       c2 >= VBASE && c2 < VBASE + VCOUNT) {
@@ -458,12 +474,7 @@ compose_pair(unsigned int c1, unsigned int c2)
 	   c2 >= TBASE && c2 < TBASE + TCOUNT) {
     return c1 + (c2 - TBASE);
   }
-  UCS4toUTF8(p, c1);
-  UCS4toUTF8(p, c2);
-  *p = '\0';
-  ret = get_composition(ustr);
-
-  return ret;
+  return get_composition((int)c1, (int)c2);
 }
 
 /*
@@ -1242,22 +1253,8 @@ Init_unicode_native()
 #endif
 
   mUnicode = rb_define_module("Unicode");
-  unicode_data = rb_hash_new();
-  composition_table = rb_hash_new();
-
-  rb_global_variable(&unicode_data);
-  rb_global_variable(&composition_table);
-
-  for (i = 0; unidata[i].code != -1; i++) {
-    int code = unidata[i].code;
-    const char* canon = unidata[i].canon;
-    int exclusion = unidata[i].exclusion;
-
-    rb_hash_aset(unicode_data, INT2FIX(code), INT2FIX(i));
-    if (canon && exclusion == 0) {
-      rb_hash_aset(composition_table, rb_str_new2(canon), INT2FIX(code));
-    }
-  }
+  build_bmp_index();
+  build_composition_pairs();
 
   for (i = 0; i < c_Cn + 1; i++) {
     catname_abbr[i] = ID2SYM(rb_intern(gencat_abbr[i]));
