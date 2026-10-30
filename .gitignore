@@ -3,7 +3,7 @@ pkg
 tmp
 
 # Compiled extension, installed here by `rake compile`.
-/lib/unicode/
+/lib/unicode/unicode_native.*
 
 # Libraries resolve dependencies fresh against the host app's constraints.
 Gemfile.lock

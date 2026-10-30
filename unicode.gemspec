@@ -1,8 +1,10 @@
 # frozen_string_literal: true
 
+require_relative 'lib/unicode/version'
+
 Gem::Specification.new do |s|
   s.name = 'unicode'
-  s.version = '0.4.4.5'
+  s.version = Unicode::VERSION
   s.authors = ['Yoshida Masato', 'Ryan Kerr']
   s.email = %w[yoshidam@yoshidam.net ryan@magellan.ai]
   s.homepage = 'https://github.com/magellan-ai/unicode'
