@@ -2,3 +2,12 @@
 upstream
 pkg
 tmp
+
+# Compiled extension, installed here by `rake compile`.
+/lib/unicode/
+
+# Libraries resolve dependencies fresh against the host app's constraints.
+Gemfile.lock
+
+# SimpleCov output (spec/spec_helper.rb).
+/coverage

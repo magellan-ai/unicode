@@ -1,6 +1,7 @@
 require 'rake/clean'
 require 'rake/extensiontask'
 require 'rubygems/package_task'
+require 'rspec/core/rake_task'
 
 CLEAN << 'pkg' << 'tmp' << 'lib/unicode'
 
@@ -16,6 +17,10 @@ cross_task = Rake::ExtensionTask.new('unicode_native', gem_spec) do |ext|
   ext.ext_dir = 'ext/unicode'
   ext.lib_dir = 'lib/unicode'
 end
+
+RSpec::Core::RakeTask.new(:spec)
+
+task default: %i[compile spec]
 
 namespace :gem do
 
