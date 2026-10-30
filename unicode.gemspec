@@ -13,7 +13,7 @@ Gem::Specification.new do |s|
   s.extra_rdoc_files = [%q{README}]
   s.files = %w[
     README Rakefile unicode.gemspec lib/unicode.rb
-    test/test.rb tools/README tools/mkunidata.rb tools/normtest.rb
+    tools/README tools/mkunidata.rb
     ext/unicode/extconf.rb ext/unicode/unicode.c ext/unicode/unidata.map
     ext/unicode/ustring.c ext/unicode/ustring.h ext/unicode/wstring.c ext/unicode/wstring.h
   ]
