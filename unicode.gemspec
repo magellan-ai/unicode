@@ -13,5 +13,5 @@ Gem::Specification.new do |s|
   s.required_ruby_version = '>= 3.3'
   s.files = Dir['README*', 'LICENSE*', 'lib/**/*.rb', 'ext/**/*.{c,h,map,rb}']
   s.extensions = ['ext/unicode/extconf.rb']
-  s.extra_rdoc_files = %w[README]
+  s.extra_rdoc_files = %w[README.md]
 end
