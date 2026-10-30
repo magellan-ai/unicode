@@ -1,0 +1,53 @@
+# frozen_string_literal: true
+
+RSpec.describe Unicode do
+  let(:string_returning_methods) do
+    %i[
+      decompose decompose_safe decompose_compat compose
+      normalize_C normalize_C_safe normalize_KC
+      upcase downcase capitalize
+    ]
+  end
+  let(:string_reading_methods) { [*string_returning_methods, :categories, :abbr_categories, :text_elements, :width] }
+
+  it 'raises TypeError for a non-String argument' do
+    string_reading_methods.each do |method|
+      expect { described_class.public_send(method, :abc) }.to raise_error(TypeError)
+    end
+    expect { described_class.strcmp('abc', nil) }.to raise_error(TypeError)
+  end
+
+  it 'transcodes non-UTF-8 input and returns UTF-8' do
+    iso_8859_1_input = "\u00C0b".encode('ISO-8859-1')
+
+    expect(described_class.downcase(iso_8859_1_input)).to eq("\u00E0b")
+    string_returning_methods.each do |method|
+      expect(described_class.public_send(method, iso_8859_1_input).encoding).to eq(Encoding::UTF_8)
+    end
+  end
+
+  it 'accepts binary input that is plain ASCII' do
+    expect(described_class.downcase('AB'.b)).to eq('ab')
+  end
+
+  it 'raises when binary input has bytes that cannot become UTF-8' do
+    expect { described_class.downcase("A\xFF".b) }.to raise_error(Encoding::UndefinedConversionError)
+  end
+
+  it 'returns a new string rather than the argument' do
+    argument = 'abc'
+
+    expect(described_class.downcase(argument)).not_to equal(argument)
+  end
+
+  it 'raises ArgumentError for invalid UTF-8, like String#downcase' do
+    pending 'the C decoder stops at the first invalid byte and returns what it decoded so far'
+
+    aggregate_failures do
+      string_reading_methods.each do |method|
+        expect { described_class.public_send(method, "AB\xFFCD") }.to raise_error(ArgumentError)
+        expect { described_class.public_send(method, "AB\xE3\x81") }.to raise_error(ArgumentError)
+      end
+    end
+  end
+end
