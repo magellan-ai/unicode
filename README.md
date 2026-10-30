@@ -123,7 +123,9 @@ the Unicode Character Database; see [`tools/README`](tools/README).
 
 ## License
 
-Copyright Yoshida Masato. Distributed under the same terms as Ruby.
+Copyright Yoshida Masato. Distributed under the same terms as Ruby: the 2-clause BSD License, or Ruby's own
+conditions. The Unicode Character Database data it's built from is under the Unicode License. See
+[`LICENSE`](LICENSE) for all three.
 
 ## History
 
