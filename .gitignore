@@ -10,3 +10,7 @@ Gemfile.lock
 
 # SimpleCov output (spec/spec_helper.rb).
 /coverage
+
+# Claude Code local files
+CLAUDE.local.md
+.claude
