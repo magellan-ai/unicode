@@ -9,7 +9,7 @@ UPSTREAM_URL = 'http://www.yoshidam.net/unicode-%s.tar.gz'
 
 gem_spec = eval(File.read(File.expand_path('../unicode.gemspec', __FILE__)))
 
-gem_task = Gem::PackageTask.new(gem_spec) {|pkg|}
+Gem::PackageTask.new(gem_spec) {|pkg|}
 
 cross_task = Rake::ExtensionTask.new('unicode_native', gem_spec) do |ext|
   ext.cross_compile = true
@@ -25,37 +25,7 @@ task default: %i[compile spec]
 namespace :gem do
 
   desc 'Build all gem files'
-  task all: %w[clean gem gem:java gem:windows]
-
-  java_gem_spec = gem_spec.dup
-  java_gem_spec.platform = 'java'
-  java_gem_spec.extensions.clear
-  java_gem_spec.files.delete_if { |f| f.start_with?('ext/') }
-
-  directory java_gem_dir = gem_task.package_dir
-
-  java_gem_file = File.basename(java_gem_spec.cache_file)
-  java_gem_path = File.join(java_gem_dir, java_gem_file)
-
-  desc "Build the gem file #{java_gem_file}"
-  task java: java_gem_path
-
-  file java_gem_path => [java_gem_dir] + java_gem_spec.files do
-    lib_file = 'lib/unicode.rb'
-    tmp_file = "#{lib_file}.tmp-#{$$}"
-    jrb_file = lib_file.sub('.', '-java.')
-
-    begin
-      mv lib_file, tmp_file
-      ln jrb_file, lib_file
-
-      Gem::Package.build(java_gem_spec)
-
-      mv java_gem_file, java_gem_dir
-    ensure
-      mv tmp_file, lib_file if File.exist?(tmp_file)
-    end
-  end
+  task all: %w[clean gem gem:windows]
 
   desc 'Build native gems for Windows'
   task :windows do
