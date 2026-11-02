@@ -362,6 +362,9 @@ build_composition_pairs(void)
   size_t i;
   size_t capacity = 0;
 
+  if (composition_pairs)
+    return;
+
   for (i = 0; i < UNIDATA_COUNT; i++) {
     if (unidata[i].canon && !unidata[i].exclusion)
       capacity++;
