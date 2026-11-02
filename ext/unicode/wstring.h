@@ -1,7 +1,6 @@
 /*
  * Simple wide string library
- * Version 0.1
- * 1999 by yoshidam
+ * By Yoshida Masato, 1999. See LICENSE.
  */
 
 #ifndef _WSTRING_H
@@ -18,23 +17,20 @@ extern "C" {
 
 typedef struct _WString {
   int* str;
-  int len;
-  int size;
+  long len;
+  long size;
 } WString;
 
 WString* WStr_alloc(WString* str);
-WString* WStr_allocWithUTF8(WString* s, const char* u);
-WString* WStr_allocWithUTF8L(WString* s, const char* u, int len);
-WString* WStr_enlarge(WString* str, int size);
+WString* WStr_allocCapacity(WString* str, long capacity);
+WString* WStr_decodeUTF8(WString* s, const char* u, long len);
+WString* WStr_enlarge(WString* str, long size);
 void WStr_free(WString* str);
-int WStr_addWChars(WString* s, const int* a, int len);
-int WStr_addWChar(WString* s, int a);
-int WStr_pushWString(WString* s, const WString* add);
-int WStr_addWChar2(WString* s, int a1, int a2);
-int WStr_addWChar3(WString* s, int a1, int a2, int a3);
+long WStr_addWChars(WString* s, const int* a, long len);
+long WStr_addWChar(WString* s, int a);
+long WStr_pushWString(WString* s, const WString* add);
 UString* WStr_convertIntoUString(WString* wstr, UString* ustr);
-UString* WStr_convertIntoUString2(WString* wstr, int start, int len, UString* ustr);
-void WStr_dump(WString* s);
+UString* WStr_convertIntoUString2(WString* wstr, long start, long len, UString* ustr);
 
 #ifdef __cplusplus
 }

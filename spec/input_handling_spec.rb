@@ -40,14 +40,40 @@ RSpec.describe Unicode do
     expect(described_class.downcase(argument)).not_to equal(argument)
   end
 
-  it 'raises ArgumentError for invalid UTF-8, like String#downcase' do
-    pending 'the C decoder stops at the first invalid byte and returns what it decoded so far'
+  it 'maps an empty string to an empty string' do
+    string_returning_methods.each do |method|
+      expect(described_class.public_send(method, '')).to eq('')
+    end
+    expect([described_class.categories(''), described_class.text_elements(''), described_class.width('')]).to eq([[], [], 0])
+  end
+
+  it 'raises ArgumentError for bytes that are not valid UTF-8, like String#unicode_normalize' do
+    invalid_bytes_message = 'invalid byte sequence in UTF-8'
+    malformed_inputs = {
+      impossible_byte:     "AB\xFFCD",
+      truncated_character: "AB\xE3\x81",
+      overlong_slash:      "AB\xC0\xAFCD",
+      surrogate:           "AB\xED\xA0\x80CD",
+      past_u10ffff:        "AB\xF4\x90\x80\x80CD"
+    }
 
     aggregate_failures do
-      string_reading_methods.each do |method|
-        expect { described_class.public_send(method, "AB\xFFCD") }.to raise_error(ArgumentError)
-        expect { described_class.public_send(method, "AB\xE3\x81") }.to raise_error(ArgumentError)
+      malformed_inputs.each_value do |input|
+        string_reading_methods.each do |method|
+          expect { described_class.public_send(method, input) }.to raise_error(ArgumentError, invalid_bytes_message)
+        end
+        %i[strcmp strcmp_compat].each do |method|
+          expect { described_class.public_send(method, input, 'AB') }.to raise_error(ArgumentError, invalid_bytes_message)
+          expect { described_class.public_send(method, 'AB', input) }.to raise_error(ArgumentError, invalid_bytes_message)
+        end
       end
+      expect { described_class.downcase("A\xFF".dup.force_encoding('US-ASCII')) }.to raise_error(ArgumentError, invalid_bytes_message)
     end
+  end
+
+  it 'reads a US-ASCII-tagged string as UTF-8 bytes' do
+    mislabeled_capital_e_acute = [0xC3, 0x89].pack('C*').force_encoding('US-ASCII')
+
+    expect(described_class.downcase(mislabeled_capital_e_acute).codepoints).to eq([0xE9])
   end
 end

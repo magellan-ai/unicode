@@ -1,37 +1,27 @@
 /*
  * Simple string library
- * Version 0.2
- * 1999 by yoshidam
+ * By Yoshida Masato, 1999. See LICENSE.
  */
 
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "ustring.h"
+#include "allocation.h"
 
 UString*
 UniStr_alloc(UString* str)
 {
+  str->str = (unsigned char*)buffer_malloc(USTR_INITIAL_STRING_LEN, 1);
   str->size = USTR_INITIAL_STRING_LEN;
   str->len = 0;
-  if ((str->str = (unsigned char*)malloc(USTR_INITIAL_STRING_LEN)) == NULL) {
-    str->size = 0;
-    return NULL;
-  }
 
   return str;
 }
 
 UString*
-UniStr_enlarge(UString* str, int size)
+UniStr_enlarge(UString* str, long size)
 {
-  unsigned char* newptr;
-
-  if ((newptr = (unsigned char*)realloc(str->str, str->size + size))
-      == NULL) {
-    return NULL;
-  }
-  str->str = newptr;
+  str->str = (unsigned char*)buffer_realloc(str->str, (size_t)(str->size + size), 1);
   str->size += size;
 
   return str;
@@ -42,22 +32,13 @@ UniStr_free(UString* str)
 {
   str->size = 0;
   str->len = 0;
-  free(str->str);
-}
-
-int
-UniStr_addChars(UString* s, const unsigned char* a, int len)
-{
-  if (s->len + len >= s->size) {
-    UniStr_enlarge(s, len + USTR_STRING_EXTEND_LEN);
+  if (str->str) {
+    buffer_free(str->str);
+    str->str = NULL;
   }
-  memcpy(s->str + s->len, a, len);
-  s->len += len;
-
-  return s->len;
 }
 
-int
+long
 UniStr_addChar(UString* s, unsigned char a)
 {
   if (s->len + 1 >= s->size) {
@@ -69,7 +50,7 @@ UniStr_addChar(UString* s, unsigned char a)
   return s->len;
 }
 
-int
+long
 UniStr_addChar2(UString* s, unsigned char a1, unsigned char a2)
 {
   if (s->len + 2 >= s->size) {
@@ -82,7 +63,7 @@ UniStr_addChar2(UString* s, unsigned char a1, unsigned char a2)
   return s->len;
 }
 
-int
+long
 UniStr_addChar3(UString* s, unsigned char a1, unsigned char a2, unsigned char a3)
 {
   if (s->len + 3 >= s->size) {
@@ -96,7 +77,7 @@ UniStr_addChar3(UString* s, unsigned char a1, unsigned char a2, unsigned char a3
   return s->len;
 }
 
-int
+long
 UniStr_addChar4(UString* s, unsigned char a1, unsigned char a2,
 	      unsigned char a3, unsigned char a4)
 {
@@ -112,7 +93,7 @@ UniStr_addChar4(UString* s, unsigned char a1, unsigned char a2,
   return s->len;
 }
 
-int
+long
 UniStr_addChar5(UString* s, unsigned char a1, unsigned char a2,
 	      unsigned char a3, unsigned char a4, unsigned char a5)
 {
@@ -129,7 +110,7 @@ UniStr_addChar5(UString* s, unsigned char a1, unsigned char a2,
   return s->len;
 }
 
-int
+long
 UniStr_addChar6(UString* s, unsigned char a1, unsigned char a2,
 	      unsigned char a3, unsigned char a4,
 	      unsigned char a5, unsigned char a6)
@@ -148,7 +129,7 @@ UniStr_addChar6(UString* s, unsigned char a1, unsigned char a2,
   return s->len;
 }
 
-int
+long
 UniStr_addWChar(UString* ustr, unsigned int c)
 {
   if (c < 128) {         /* 0x0000-0x00FF */
@@ -193,16 +174,4 @@ UniStr_addWChar(UString* ustr, unsigned int c)
   }
 
   return ustr->len;
-}
-
-void
-UniStr_dump(UString* s)
-{
-  int i;
-
-  printf("[%d/%d] ", s->len, s->size);
-  for (i = 0; i < s->len ; i++) {
-    printf("%02x ", *(s->str + i));
-  }
-  printf("\n");
 }

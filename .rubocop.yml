@@ -586,6 +586,10 @@ Style/FormatStringToken:
   Enabled: true
   EnforcedStyle: template
 
+Style/GlobalVars:
+  Exclude:
+    - ext/**/extconf.rb
+
 Style/GuardClause:
   Enabled: true
 

@@ -1,0 +1,15 @@
+name: Assign and announce PR reviewers
+on:
+  pull_request:
+    types: [opened, ready_for_review, review_requested, assigned, closed]
+  pull_request_review:
+    types: [submitted]
+
+jobs:
+  assign-reviewer:
+    permissions:
+      pull-requests: write
+    uses: magellan-ai/workflows/.github/workflows/random-pr-reviewer.yml@main
+    secrets:
+      SLACK_REVIEWER_WEBHOOK: ${{ secrets.SLACK_REVIEWER_WEBHOOK }}
+      SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}

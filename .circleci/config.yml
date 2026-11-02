@@ -79,6 +79,20 @@ jobs:
           name: RuboCop
           command: bundle exec rubocop
 
+  sanitized:
+    executor:
+      name: ruby
+      ruby_version: '4.0'
+    steps:
+      - checkout
+
+      - bundle_install:
+          ruby_version: '4.0'
+
+      - run:
+          name: RSpec under AddressSanitizer and UndefinedBehaviorSanitizer
+          command: bundle exec rake spec:sanitized
+
 workflows:
   build:
     jobs:
@@ -89,3 +103,5 @@ workflows:
               ruby_version: ['3.3', '3.4', '4.0']
 
       - rubocop
+
+      - sanitized

@@ -1,15 +1,11 @@
 # frozen_string_literal: true
 
-require 'open3'
-require 'rbconfig'
-
 RSpec.describe Unicode do
-  let(:project_root) { File.expand_path('..', __dir__) }
-
   it 'defines VERSION once, matching the version the gemspec ships' do
-    gemspec_version, = Open3.capture3(RbConfig.ruby, '-e', 'print Gem::Specification.load("unicode.gemspec").version', chdir: project_root)
-    loaded_version, warnings, status = Open3.capture3(RbConfig.ruby, '-w', '-Ilib', '-e', 'require "unicode"; print Unicode::VERSION', chdir: project_root)
+    gemspec_version, = run_ruby('-e', 'print Gem::Specification.load("unicode.gemspec").version')
+    loaded_version, status = run_ruby('-w', '-Ilib', '-e', 'require "unicode"; print Unicode::VERSION')
 
-    expect([status.success?, warnings, loaded_version]).to eq([true, '', gemspec_version])
+    expect(status).to be_success
+    expect(loaded_version).to eq(gemspec_version)
   end
 end
