@@ -1044,7 +1044,7 @@ unicode_get_text_elements(VALUE obj, VALUE str)
   return call_with_buffers(text_elements_work, &call);
 }
 
-void
+RUBY_FUNC_EXPORTED void
 Init_unicode_native(void)
 {
   int i;
