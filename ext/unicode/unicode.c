@@ -706,251 +706,114 @@ unicode_strcmp_compat(VALUE obj, VALUE str1, VALUE str2)
   return compare_decompositions(str1, str2, decompose_compat_internal);
 }
 
+struct transform_steps {
+  WString* (*first)(WString*, WString*);
+  int sort;
+  WString* (*second)(WString*, WString*);
+};
+
+static VALUE
+transform_string(VALUE str, const struct transform_steps* steps)
+{
+  WString current;
+  WString next;
+  UString utf8;
+  VALUE result;
+
+  str = utf8_argument(str);
+  WStr_allocWithUTF8L(&current, RSTRING_PTR(str), RSTRING_LEN(str));
+  if (steps->first) {
+    WStr_alloc(&next);
+    steps->first(&current, &next);
+    WStr_free(&current);
+    current = next;
+  }
+  if (steps->sort)
+    sort_canonical(&current);
+  if (steps->second) {
+    WStr_alloc(&next);
+    steps->second(&current, &next);
+    WStr_free(&current);
+    current = next;
+  }
+  UniStr_alloc(&utf8);
+  WStr_convertIntoUString(&current, &utf8);
+  WStr_free(&current);
+  result = ENC_(rb_str_new((char*)utf8.str, utf8.len));
+  UniStr_free(&utf8);
+
+  return result;
+}
+
+static const struct transform_steps decompose_steps = { decompose_internal, 1, NULL };
+static const struct transform_steps decompose_safe_steps = { decompose_safe_internal, 1, NULL };
+static const struct transform_steps decompose_compat_steps = { decompose_compat_internal, 1, NULL };
+static const struct transform_steps compose_steps = { NULL, 1, compose_internal };
+static const struct transform_steps normalize_C_steps = { decompose_internal, 1, compose_internal };
+static const struct transform_steps normalize_safe_steps = { decompose_safe_internal, 1, compose_internal };
+static const struct transform_steps normalize_KC_steps = { decompose_compat_internal, 1, compose_internal };
+static const struct transform_steps upcase_steps = { upcase_internal, 0, NULL };
+static const struct transform_steps downcase_steps = { downcase_internal, 0, NULL };
+static const struct transform_steps capitalize_steps = { capitalize_internal, 0, NULL };
+
 static VALUE
 unicode_decompose(VALUE obj, VALUE str)
 {
-  WString ustr;
-  WString result;
-  UString ret;
-  VALUE vret;
-
-  str = utf8_argument(str);
-  WStr_allocWithUTF8L(&ustr, RSTRING_PTR(str), RSTRING_LEN(str));
-  WStr_alloc(&result);
-  decompose_internal(&ustr, &result);
-  WStr_free(&ustr);
-  sort_canonical(&result);
-  UniStr_alloc(&ret);
-  WStr_convertIntoUString(&result, &ret);
-  WStr_free(&result);
-  vret = TO_(str, ENC_(rb_str_new((char*)ret.str, ret.len)));
-  UniStr_free(&ret);
-
-  return vret;
+  return transform_string(str, &decompose_steps);
 }
 
 static VALUE
 unicode_decompose_safe(VALUE obj, VALUE str)
 {
-  WString ustr;
-  WString result;
-  UString ret;
-  VALUE vret;
-
-  str = utf8_argument(str);
-  WStr_allocWithUTF8L(&ustr, RSTRING_PTR(str), RSTRING_LEN(str));
-  WStr_alloc(&result);
-  decompose_safe_internal(&ustr, &result);
-  WStr_free(&ustr);
-  sort_canonical(&result);
-  UniStr_alloc(&ret);
-  WStr_convertIntoUString(&result, &ret);
-  WStr_free(&result);
-  vret = TO_(str, ENC_(rb_str_new((char*)ret.str, ret.len)));
-  UniStr_free(&ret);
-
-  return vret;
+  return transform_string(str, &decompose_safe_steps);
 }
 
 static VALUE
 unicode_decompose_compat(VALUE obj, VALUE str)
 {
-  WString ustr;
-  WString result;
-  UString ret;
-  VALUE vret;
-
-  str = utf8_argument(str);
-  WStr_allocWithUTF8L(&ustr, RSTRING_PTR(str), RSTRING_LEN(str));
-  WStr_alloc(&result);
-  decompose_compat_internal(&ustr, &result);
-  WStr_free(&ustr);
-  sort_canonical(&result);
-  UniStr_alloc(&ret);
-  WStr_convertIntoUString(&result, &ret);
-  WStr_free(&result);
-  vret = TO_(str, ENC_(rb_str_new((char*)ret.str, ret.len)));
-  UniStr_free(&ret);
-
-  return vret;
+  return transform_string(str, &decompose_compat_steps);
 }
 
 static VALUE
 unicode_compose(VALUE obj, VALUE str)
 {
-  WString ustr;
-  WString result;
-  UString ret;
-  VALUE vret;
-
-  str = utf8_argument(str);
-  WStr_allocWithUTF8L(&ustr, RSTRING_PTR(str), RSTRING_LEN(str));
-  sort_canonical(&ustr);
-  WStr_alloc(&result);
-  compose_internal(&ustr, &result);
-  WStr_free(&ustr);
-  UniStr_alloc(&ret);
-  WStr_convertIntoUString(&result, &ret);
-  WStr_free(&result);
-  vret = TO_(str, ENC_(rb_str_new((char*)ret.str, ret.len)));
-  UniStr_free(&ret);
-
-  return vret;
+  return transform_string(str, &compose_steps);
 }
 
 static VALUE
 unicode_normalize_C(VALUE obj, VALUE str)
 {
-  WString ustr1;
-  WString ustr2;
-  WString result;
-  UString ret;
-  VALUE vret;
-
-  str = utf8_argument(str);
-  WStr_allocWithUTF8L(&ustr1, RSTRING_PTR(str), RSTRING_LEN(str));
-  WStr_alloc(&ustr2);
-  decompose_internal(&ustr1, &ustr2);
-  WStr_free(&ustr1);
-  sort_canonical(&ustr2);
-  WStr_alloc(&result);
-  compose_internal(&ustr2, &result);
-  WStr_free(&ustr2);
-  UniStr_alloc(&ret);
-  WStr_convertIntoUString(&result, &ret);
-  WStr_free(&result);
-  vret = TO_(str, ENC_(rb_str_new((char*)ret.str, ret.len)));
-  UniStr_free(&ret);
-
-  return vret;
+  return transform_string(str, &normalize_C_steps);
 }
 
 static VALUE
 unicode_normalize_safe(VALUE obj, VALUE str)
 {
-  WString ustr1;
-  WString ustr2;
-  WString result;
-  UString ret;
-  VALUE vret;
-
-  str = utf8_argument(str);
-  WStr_allocWithUTF8L(&ustr1, RSTRING_PTR(str), RSTRING_LEN(str));
-  WStr_alloc(&ustr2);
-  decompose_safe_internal(&ustr1, &ustr2);
-  WStr_free(&ustr1);
-  sort_canonical(&ustr2);
-  WStr_alloc(&result);
-  compose_internal(&ustr2, &result);
-  WStr_free(&ustr2);
-  UniStr_alloc(&ret);
-  WStr_convertIntoUString(&result, &ret);
-  WStr_free(&result);
-  vret = TO_(str, ENC_(rb_str_new((char*)ret.str, ret.len)));
-  UniStr_free(&ret);
-
-  return vret;
+  return transform_string(str, &normalize_safe_steps);
 }
 
 static VALUE
 unicode_normalize_KC(VALUE obj, VALUE str)
 {
-  WString ustr1;
-  WString ustr2;
-  WString result;
-  UString ret;
-  VALUE vret;
-
-  str = utf8_argument(str);
-  WStr_allocWithUTF8L(&ustr1, RSTRING_PTR(str), RSTRING_LEN(str));
-  WStr_alloc(&ustr2);
-  decompose_compat_internal(&ustr1, &ustr2);
-  WStr_free(&ustr1);
-  sort_canonical(&ustr2);
-  WStr_alloc(&result);
-  compose_internal(&ustr2, &result);
-  WStr_free(&ustr2);
-  UniStr_alloc(&ret);
-  WStr_convertIntoUString(&result, &ret);
-  WStr_free(&result);
-  vret = TO_(str, ENC_(rb_str_new((char*)ret.str, ret.len)));
-  UniStr_free(&ret);
-
-  return vret;
+  return transform_string(str, &normalize_KC_steps);
 }
 
 static VALUE
 unicode_upcase(VALUE obj, VALUE str)
 {
-  WString ustr;
-  WString result;
-  UString ret;
-  VALUE vret;
-
-  str = utf8_argument(str);
-  WStr_allocWithUTF8L(&ustr, RSTRING_PTR(str), RSTRING_LEN(str));
-  WStr_alloc(&result);
-  upcase_internal(&ustr, &result);
-  //sort_canonical(&result);
-  WStr_free(&ustr);
-  UniStr_alloc(&ret);
-  WStr_convertIntoUString(&result, &ret);
-  WStr_free(&result);
-  vret = TO_(str, ENC_(rb_str_new((char*)ret.str, ret.len)));
-  UniStr_free(&ret);
-
-  return vret;
+  return transform_string(str, &upcase_steps);
 }
 
 static VALUE
 unicode_downcase(VALUE obj, VALUE str)
 {
-  WString ustr;
-  WString result;
-  UString ret;
-  VALUE vret;
-
-  str = utf8_argument(str);
-  WStr_allocWithUTF8L(&ustr, RSTRING_PTR(str), RSTRING_LEN(str));
-  WStr_alloc(&result);
-  downcase_internal(&ustr, &result);
-  //sort_canonical(&result);
-  WStr_free(&ustr);
-  UniStr_alloc(&ret);
-  WStr_convertIntoUString(&result, &ret);
-  WStr_free(&result);
-  vret = TO_(str, ENC_(rb_str_new((char*)ret.str, ret.len)));
-  UniStr_free(&ret);
-
-  return vret;
+  return transform_string(str, &downcase_steps);
 }
-
-#ifdef HAVE_RUBY_ENCODING_H
-
-
-#endif
 
 static VALUE
 unicode_capitalize(VALUE obj, VALUE str)
 {
-  WString ustr;
-  WString result;
-  UString ret;
-  VALUE vret;
-
-  str = utf8_argument(str);
-  WStr_allocWithUTF8L(&ustr, RSTRING_PTR(str), RSTRING_LEN(str));
-  WStr_alloc(&result);
-  capitalize_internal(&ustr, &result);
-  //sort_canonical(&result);
-  WStr_free(&ustr);
-  UniStr_alloc(&ret);
-  WStr_convertIntoUString(&result, &ret);
-  WStr_free(&result);
-  vret = TO_(str, ENC_(rb_str_new((char*)ret.str, ret.len)));
-  UniStr_free(&ret);
-
-  return vret;
+  return transform_string(str, &capitalize_steps);
 }
 
 typedef struct _get_categories_param {
