@@ -40,17 +40,31 @@ taintObject(VALUE src, VALUE obj) {
 }
 #define TO_(src, obj) (taintObject(src, obj))
 
-#ifdef HAVE_RUBY_ENCODING_H
-#  define CONVERT_TO_UTF8(str) do { \
-    int encindex = ENCODING_GET(str); \
-    volatile VALUE encobj; \
-    if (encindex != rb_utf8_encindex() && \
-        encindex != rb_usascii_encindex()) { \
-      encobj = rb_enc_from_encoding(enc_out); \
-      str = rb_str_encode(str, encobj, 0, Qnil); \
-    } \
-  } while (0)
-#endif
+/*
+ * Returns str as the valid UTF-8 String every entry point works on. UTF-8- and US-ASCII-tagged
+ * strings are read as UTF-8 bytes; any other encoding is transcoded to UTF-8 first. Raises
+ * TypeError for a non-String, an EncodingError when transcoding fails, and ArgumentError for bytes
+ * that aren't valid UTF-8, which the decoder would otherwise silently truncate. Entry points call
+ * this before allocating any native buffer, so a raise here leaks nothing.
+ */
+static VALUE
+utf8_argument(VALUE str)
+{
+  int encindex;
+
+  Check_Type(str, T_STRING);
+  encindex = ENCODING_GET(str);
+  if (encindex == rb_usascii_encindex()) {
+    if (rb_enc_str_coderange(str) != ENC_CODERANGE_7BIT)
+      str = rb_enc_associate(rb_str_dup(str), enc_out);
+  }
+  else if (encindex != rb_utf8_encindex()) {
+    str = rb_str_encode(str, rb_enc_from_encoding(enc_out), 0, Qnil);
+  }
+  if (rb_enc_str_coderange(str) == ENC_CODERANGE_BROKEN)
+    rb_raise(rb_eArgError, "invalid byte sequence in UTF-8");
+  return str;
+}
 
 static VALUE mUnicode;
 static VALUE catname_long[c_Cn+1];
@@ -647,12 +661,8 @@ unicode_strcmp(VALUE obj, VALUE str1, VALUE str2)
   UString ustr2;
   int ret;
 
-  Check_Type(str1, T_STRING);
-  Check_Type(str2, T_STRING);
-#ifdef HAVE_RUBY_ENCODING_H
-  CONVERT_TO_UTF8(str1);
-  CONVERT_TO_UTF8(str2);
-#endif
+  str1 = utf8_argument(str1);
+  str2 = utf8_argument(str2);
   WStr_allocWithUTF8L(&wstr1, RSTRING_PTR(str1), RSTRING_LEN(str1));
   WStr_allocWithUTF8L(&wstr2, RSTRING_PTR(str2), RSTRING_LEN(str2));
   WStr_alloc(&result1);
@@ -689,12 +699,8 @@ unicode_strcmp_compat(VALUE obj, VALUE str1, VALUE str2)
   UString ustr2;
   int ret;
 
-  Check_Type(str1, T_STRING);
-  Check_Type(str2, T_STRING);
-#ifdef HAVE_RUBY_ENCODING_H
-  CONVERT_TO_UTF8(str1);
-  CONVERT_TO_UTF8(str2);
-#endif
+  str1 = utf8_argument(str1);
+  str2 = utf8_argument(str2);
   WStr_allocWithUTF8L(&wstr1, RSTRING_PTR(str1), RSTRING_LEN(str1));
   WStr_allocWithUTF8L(&wstr2, RSTRING_PTR(str2), RSTRING_LEN(str2));
   WStr_alloc(&result1);
@@ -728,10 +734,7 @@ unicode_decompose(VALUE obj, VALUE str)
   UString ret;
   VALUE vret;
 
-  Check_Type(str, T_STRING);
-#ifdef HAVE_RUBY_ENCODING_H
-  CONVERT_TO_UTF8(str);
-#endif
+  str = utf8_argument(str);
   WStr_allocWithUTF8L(&ustr, RSTRING_PTR(str), RSTRING_LEN(str));
   WStr_alloc(&result);
   decompose_internal(&ustr, &result);
@@ -754,10 +757,7 @@ unicode_decompose_safe(VALUE obj, VALUE str)
   UString ret;
   VALUE vret;
 
-  Check_Type(str, T_STRING);
-#ifdef HAVE_RUBY_ENCODING_H
-  CONVERT_TO_UTF8(str);
-#endif
+  str = utf8_argument(str);
   WStr_allocWithUTF8L(&ustr, RSTRING_PTR(str), RSTRING_LEN(str));
   WStr_alloc(&result);
   decompose_safe_internal(&ustr, &result);
@@ -780,10 +780,7 @@ unicode_decompose_compat(VALUE obj, VALUE str)
   UString ret;
   VALUE vret;
 
-  Check_Type(str, T_STRING);
-#ifdef HAVE_RUBY_ENCODING_H
-  CONVERT_TO_UTF8(str);
-#endif
+  str = utf8_argument(str);
   WStr_allocWithUTF8L(&ustr, RSTRING_PTR(str), RSTRING_LEN(str));
   WStr_alloc(&result);
   decompose_compat_internal(&ustr, &result);
@@ -806,10 +803,7 @@ unicode_compose(VALUE obj, VALUE str)
   UString ret;
   VALUE vret;
 
-  Check_Type(str, T_STRING);
-#ifdef HAVE_RUBY_ENCODING_H
-  CONVERT_TO_UTF8(str);
-#endif
+  str = utf8_argument(str);
   WStr_allocWithUTF8L(&ustr, RSTRING_PTR(str), RSTRING_LEN(str));
   sort_canonical(&ustr);
   WStr_alloc(&result);
@@ -833,10 +827,7 @@ unicode_normalize_C(VALUE obj, VALUE str)
   UString ret;
   VALUE vret;
 
-  Check_Type(str, T_STRING);
-#ifdef HAVE_RUBY_ENCODING_H
-  CONVERT_TO_UTF8(str);
-#endif
+  str = utf8_argument(str);
   WStr_allocWithUTF8L(&ustr1, RSTRING_PTR(str), RSTRING_LEN(str));
   WStr_alloc(&ustr2);
   decompose_internal(&ustr1, &ustr2);
@@ -863,10 +854,7 @@ unicode_normalize_safe(VALUE obj, VALUE str)
   UString ret;
   VALUE vret;
 
-  Check_Type(str, T_STRING);
-#ifdef HAVE_RUBY_ENCODING_H
-  CONVERT_TO_UTF8(str);
-#endif
+  str = utf8_argument(str);
   WStr_allocWithUTF8L(&ustr1, RSTRING_PTR(str), RSTRING_LEN(str));
   WStr_alloc(&ustr2);
   decompose_safe_internal(&ustr1, &ustr2);
@@ -893,10 +881,7 @@ unicode_normalize_KC(VALUE obj, VALUE str)
   UString ret;
   VALUE vret;
 
-  Check_Type(str, T_STRING);
-#ifdef HAVE_RUBY_ENCODING_H
-  CONVERT_TO_UTF8(str);
-#endif
+  str = utf8_argument(str);
   WStr_allocWithUTF8L(&ustr1, RSTRING_PTR(str), RSTRING_LEN(str));
   WStr_alloc(&ustr2);
   decompose_compat_internal(&ustr1, &ustr2);
@@ -922,10 +907,7 @@ unicode_upcase(VALUE obj, VALUE str)
   UString ret;
   VALUE vret;
 
-  Check_Type(str, T_STRING);
-#ifdef HAVE_RUBY_ENCODING_H
-  CONVERT_TO_UTF8(str);
-#endif
+  str = utf8_argument(str);
   WStr_allocWithUTF8L(&ustr, RSTRING_PTR(str), RSTRING_LEN(str));
   WStr_alloc(&result);
   upcase_internal(&ustr, &result);
@@ -948,10 +930,7 @@ unicode_downcase(VALUE obj, VALUE str)
   UString ret;
   VALUE vret;
 
-  Check_Type(str, T_STRING);
-#ifdef HAVE_RUBY_ENCODING_H
-  CONVERT_TO_UTF8(str);
-#endif
+  str = utf8_argument(str);
   WStr_allocWithUTF8L(&ustr, RSTRING_PTR(str), RSTRING_LEN(str));
   WStr_alloc(&result);
   downcase_internal(&ustr, &result);
@@ -979,10 +958,7 @@ unicode_capitalize(VALUE obj, VALUE str)
   UString ret;
   VALUE vret;
 
-  Check_Type(str, T_STRING);
-#ifdef HAVE_RUBY_ENCODING_H
-  CONVERT_TO_UTF8(str);
-#endif
+  str = utf8_argument(str);
   WStr_allocWithUTF8L(&ustr, RSTRING_PTR(str), RSTRING_LEN(str));
   WStr_alloc(&result);
   capitalize_internal(&ustr, &result);
@@ -1042,10 +1018,7 @@ unicode_get_categories(VALUE obj, VALUE str)
   WString wstr;
   get_categories_param param = { &wstr, str, catname_long };
 
-  Check_Type(str, T_STRING);
-#ifdef HAVE_RUBY_ENCODING_H
-  CONVERT_TO_UTF8(str);
-#endif
+  str = utf8_argument(str);
   WStr_allocWithUTF8L(&wstr, RSTRING_PTR(str), RSTRING_LEN(str));
 
   return rb_ensure(get_categories_internal, (VALUE)&param,
@@ -1060,10 +1033,7 @@ unicode_get_abbr_categories(VALUE obj, VALUE str)
   WString wstr;
   get_categories_param param = { &wstr, str, catname_abbr };
 
-  Check_Type(str, T_STRING);
-#ifdef HAVE_RUBY_ENCODING_H
-  CONVERT_TO_UTF8(str);
-#endif
+  str = utf8_argument(str);
   WStr_allocWithUTF8L(&wstr, RSTRING_PTR(str), RSTRING_LEN(str));
 
   return rb_ensure(get_categories_internal, (VALUE)&param,
@@ -1084,10 +1054,7 @@ unicode_wcswidth(int argc, VALUE* argv, VALUE obj)
   count = rb_scan_args(argc, argv, "11", &str, &cjk);
   if (count > 1)
     cjk_p = RTEST(cjk);
-  Check_Type(str, T_STRING);
-#ifdef HAVE_RUBY_ENCODING_H
-  CONVERT_TO_UTF8(str);
-#endif
+  str = utf8_argument(str);
   WStr_allocWithUTF8L(&wstr, RSTRING_PTR(str), RSTRING_LEN(str));
   for (i = 0; i <wstr.len; i++) {
     int c = wstr.str[i];
@@ -1232,10 +1199,7 @@ unicode_get_text_elements(VALUE obj, VALUE str)
   WString wstr;
   get_text_elements_param param = { &wstr, str };
 
-  Check_Type(str, T_STRING);
-#ifdef HAVE_RUBY_ENCODING_H
-  CONVERT_TO_UTF8(str);
-#endif
+  str = utf8_argument(str);
   WStr_allocWithUTF8L(&wstr, RSTRING_PTR(str), RSTRING_LEN(str));
 
   return rb_ensure(get_text_elements_internal, (VALUE)&param,

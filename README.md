@@ -24,8 +24,9 @@ It needs Ruby 3.3 or newer and a C compiler.
 ## Usage
 
 Every function is a module function on `Unicode`. Each takes a `String` and returns a new UTF-8 string (or an array,
-or an integer). Input in another encoding is transcoded to UTF-8 first; anything that isn't a `String` raises
-`TypeError`.
+or an integer). UTF-8 and US-ASCII strings are read as UTF-8; input in any other encoding is transcoded to UTF-8 first.
+Bytes that aren't valid UTF-8 raise `ArgumentError` (as `String#unicode_normalize` does), and anything that isn't a
+`String` raises `TypeError`.
 
 ### Normalization
 
@@ -105,10 +106,9 @@ Ruby's own (newer) implementation, see [`spec/ruby_parity_spec.rb`](spec/ruby_pa
 
 ## Known issues
 
-- Invalid UTF-8 is silently truncated at the first bad byte instead of raising an error.
 - `strcmp` and `strcmp_compat` stop comparing at an embedded NUL.
 
-Both are recorded as pending specs, and we're fixing them as part of a review of the C extension.
+This is recorded as a pending spec, and we're fixing it as part of a review of the C extension.
 
 ## Development
 
