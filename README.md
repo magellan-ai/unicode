@@ -53,13 +53,13 @@ Unicode.decompose_safe("\u212B")  # => "\u212B"
 
 ### Comparison
 
-`strcmp` and `strcmp_compat` compare the NFD and NFKD forms of two strings. They return `0` when the strings are
-equivalent, and a negative or positive number otherwise; only the sign is meaningful.
+`strcmp` and `strcmp_compat` compare the NFD and NFKD forms of two strings, codepoint by codepoint. Like `<=>`, they
+return `-1`, `0`, or `1`, and `0` means the strings are equivalent.
 
 ```ruby
 Unicode.strcmp("\u00E9", "e\u0301")              # => 0
 Unicode.strcmp_compat("\uFF76\uFF9E", "\u30AC")  # => 0
-Unicode.strcmp('a', 'b').negative?               # => true
+Unicode.strcmp('a', 'b')                         # => -1
 ```
 
 ### Case mapping
@@ -103,12 +103,6 @@ The character data is **Unicode 6.2**, and it stays pinned there on purpose: upd
 characters, and callers that hash or store normalized text depend on it staying the same. Characters added after 6.2
 are treated as unassigned, so they come back unchanged and their category is `:Cn`. For the exact differences from
 Ruby's own (newer) implementation, see [`spec/ruby_parity_spec.rb`](spec/ruby_parity_spec.rb).
-
-## Known issues
-
-- `strcmp` and `strcmp_compat` stop comparing at an embedded NUL.
-
-This is recorded as a pending spec, and we're fixing it as part of a review of the C extension.
 
 ## Development
 

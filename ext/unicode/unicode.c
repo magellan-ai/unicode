@@ -650,16 +650,35 @@ capitalize_internal(WString* str,  WString* result)
   return result;
 }
 
+/* Codepoint order is UTF-8 byte order, so this orders strings the way comparing their UTF-8 bytes does. */
+static int
+compare_codepoints(const WString* a, const WString* b)
+{
+  int i;
+  int shorter = a->len < b->len ? a->len : b->len;
+
+  for (i = 0; i < shorter; i++) {
+    if (a->str[i] != b->str[i])
+      return a->str[i] < b->str[i] ? -1 : 1;
+  }
+  if (a->len == b->len)
+    return 0;
+  return a->len < b->len ? -1 : 1;
+}
+
+/*
+ * Compares the canonically ordered decompositions of two strings, returning -1, 0, or 1. Only
+ * utf8_argument can raise, and it runs before any buffer is allocated; nothing after it calls the
+ * Ruby API, so the buffers are always freed.
+ */
 static VALUE
-unicode_strcmp(VALUE obj, VALUE str1, VALUE str2)
+compare_decompositions(VALUE str1, VALUE str2, WString* (*decompose)(WString*, WString*))
 {
   WString wstr1;
   WString wstr2;
   WString result1;
   WString result2;
-  UString ustr1;
-  UString ustr2;
-  int ret;
+  int order;
 
   str1 = utf8_argument(str1);
   str2 = utf8_argument(str2);
@@ -667,63 +686,29 @@ unicode_strcmp(VALUE obj, VALUE str1, VALUE str2)
   WStr_allocWithUTF8L(&wstr2, RSTRING_PTR(str2), RSTRING_LEN(str2));
   WStr_alloc(&result1);
   WStr_alloc(&result2);
-  decompose_internal(&wstr1, &result1);
-  decompose_internal(&wstr2, &result2);
+  decompose(&wstr1, &result1);
+  decompose(&wstr2, &result2);
   WStr_free(&wstr1);
   WStr_free(&wstr2);
   sort_canonical(&result1);
   sort_canonical(&result2);
-  UniStr_alloc(&ustr1);
-  UniStr_alloc(&ustr2);
-  WStr_convertIntoUString(&result1, &ustr1);
-  WStr_convertIntoUString(&result2, &ustr2);
+  order = compare_codepoints(&result1, &result2);
   WStr_free(&result1);
   WStr_free(&result2);
-  UniStr_addChar(&ustr1, '\0');
-  UniStr_addChar(&ustr2, '\0');
-  ret = strcmp((char*)ustr1.str, (char*)ustr2.str);
-  UniStr_free(&ustr1);
-  UniStr_free(&ustr2);
 
-  return INT2FIX(ret);
+  return INT2FIX(order);
+}
+
+static VALUE
+unicode_strcmp(VALUE obj, VALUE str1, VALUE str2)
+{
+  return compare_decompositions(str1, str2, decompose_internal);
 }
 
 static VALUE
 unicode_strcmp_compat(VALUE obj, VALUE str1, VALUE str2)
 {
-  WString wstr1;
-  WString wstr2;
-  WString result1;
-  WString result2;
-  UString ustr1;
-  UString ustr2;
-  int ret;
-
-  str1 = utf8_argument(str1);
-  str2 = utf8_argument(str2);
-  WStr_allocWithUTF8L(&wstr1, RSTRING_PTR(str1), RSTRING_LEN(str1));
-  WStr_allocWithUTF8L(&wstr2, RSTRING_PTR(str2), RSTRING_LEN(str2));
-  WStr_alloc(&result1);
-  WStr_alloc(&result2);
-  decompose_compat_internal(&wstr1, &result1);
-  decompose_compat_internal(&wstr2, &result2);
-  WStr_free(&wstr1);
-  WStr_free(&wstr2);
-  sort_canonical(&result1);
-  sort_canonical(&result2);
-  UniStr_alloc(&ustr1);
-  UniStr_alloc(&ustr2);
-  WStr_convertIntoUString(&result1, &ustr1);
-  WStr_convertIntoUString(&result2, &ustr2);
-  WStr_free(&result1);
-  WStr_free(&result2);
-  UniStr_addChar(&ustr1, '\0');
-  UniStr_addChar(&ustr2, '\0');
-  ret = strcmp((char*)ustr1.str, (char*)ustr2.str);
-  UniStr_free(&ustr1);
-  UniStr_free(&ustr2);
-
-  return INT2FIX(ret);
+  return compare_decompositions(str1, str2, decompose_compat_internal);
 }
 
 static VALUE
