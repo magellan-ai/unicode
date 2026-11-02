@@ -5,7 +5,7 @@ RSpec.describe Unicode do
     binary = $LOADED_FEATURES.grep(/unicode_native\.(?:bundle|so)\z/).first
     listing =
       begin
-        RUBY_PLATFORM.include?('darwin') ? `nm -gU #{binary}` : `nm -D --defined-only #{binary}`
+        IO.popen(['nm', *(RUBY_PLATFORM.include?('darwin') ? %w[-gU] : %w[-D --defined-only]), binary], &:read)
       rescue Errno::ENOENT
         skip 'nm is not available'
       end
