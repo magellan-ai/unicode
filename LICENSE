@@ -84,9 +84,9 @@ SUCH DAMAGE.
 Unicode Character Database
 --------------------------
 
-ext/unicode/unidata.map is generated from Unicode Character Database files, and
-spec/fixtures/ucd-6.2.0/NormalizationTest.txt.gz is a compressed copy of one. Those files
-are distributed under the following license:
+ext/unicode/unidata.map is generated from Unicode Character Database files, and the files in
+spec/fixtures/ucd-6.2.0/ are compressed copies of them. Those files are distributed under the
+following license:
 
 UNICODE LICENSE V3
 
