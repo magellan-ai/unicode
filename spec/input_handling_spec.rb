@@ -49,15 +49,23 @@ RSpec.describe Unicode do
 
   it 'raises ArgumentError for bytes that are not valid UTF-8, like String#unicode_normalize' do
     invalid_bytes_message = 'invalid byte sequence in UTF-8'
+    malformed_inputs = {
+      impossible_byte:     "AB\xFFCD",
+      truncated_character: "AB\xE3\x81",
+      overlong_slash:      "AB\xC0\xAFCD",
+      surrogate:           "AB\xED\xA0\x80CD",
+      past_u10ffff:        "AB\xF4\x90\x80\x80CD"
+    }
 
     aggregate_failures do
-      string_reading_methods.each do |method|
-        expect { described_class.public_send(method, "AB\xFFCD") }.to raise_error(ArgumentError, invalid_bytes_message)
-        expect { described_class.public_send(method, "AB\xE3\x81") }.to raise_error(ArgumentError, invalid_bytes_message)
-      end
-      %i[strcmp strcmp_compat].each do |method|
-        expect { described_class.public_send(method, "AB\xFF", 'AB') }.to raise_error(ArgumentError, invalid_bytes_message)
-        expect { described_class.public_send(method, 'AB', "AB\xFF") }.to raise_error(ArgumentError, invalid_bytes_message)
+      malformed_inputs.each_value do |input|
+        string_reading_methods.each do |method|
+          expect { described_class.public_send(method, input) }.to raise_error(ArgumentError, invalid_bytes_message)
+        end
+        %i[strcmp strcmp_compat].each do |method|
+          expect { described_class.public_send(method, input, 'AB') }.to raise_error(ArgumentError, invalid_bytes_message)
+          expect { described_class.public_send(method, 'AB', input) }.to raise_error(ArgumentError, invalid_bytes_message)
+        end
       end
       expect { described_class.downcase("A\xFF".dup.force_encoding('US-ASCII')) }.to raise_error(ArgumentError, invalid_bytes_message)
     end

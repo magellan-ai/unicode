@@ -80,7 +80,11 @@ WStr_pushWString(WString* s, const WString* add)
   return s->len;
 }
 
-/* Appends the codepoints of len bytes of UTF-8 to s, which must have room for len more. Never allocates. */
+/*
+ * Appends the codepoints of len bytes of UTF-8 to s, which must have room for len more. Never allocates. Returns
+ * NULL instead of decoding any part of a malformed sequence (a stray continuation byte, a character that starts
+ * before the previous one is complete, or input that ends mid-character).
+ */
 WString*
 WStr_decodeUTF8(WString* s, const char* in, long len)
 {
@@ -92,6 +96,8 @@ WStr_decodeUTF8(WString* s, const char* in, long len)
     return s;
   for (i = 0; i < len; i++) {
     unsigned char c = in[i];
+    if ((c & 0xc0) != 0x80 && rest != 0)
+      return NULL;
     if ((c & 0xc0) == 0x80) {
       if (rest == 0)
 	return NULL;
@@ -103,7 +109,6 @@ WStr_decodeUTF8(WString* s, const char* in, long len)
     }
     else if ((c & 0x80) == 0) {      /* 0b0nnnnnnn (7bit) */
       WStr_addWChar(s, c);
-      rest = 0;
     }
     else if ((c & 0xe0) == 0xc0) {      /* 0b110nnnnn (11bit) */
       rest = 1;
@@ -129,6 +134,8 @@ WStr_decodeUTF8(WString* s, const char* in, long len)
       return NULL;
     }
   }
+  if (rest != 0)
+    return NULL;
 
   return s;
 }

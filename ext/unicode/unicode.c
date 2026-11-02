@@ -703,7 +703,9 @@ decode_into(VALUE string, WString* buffer)
   if (length == LONG_MAX)
     rb_raise(rb_eArgError, "string too long to decode");
   WStr_allocCapacity(buffer, length + 1);
-  WStr_decodeUTF8(buffer, RSTRING_PTR(string), length);
+  /* utf8_argument has already rejected malformed input; this backstops any entry point that skips it. */
+  if (!WStr_decodeUTF8(buffer, RSTRING_PTR(string), length))
+    rb_raise(rb_eArgError, "invalid byte sequence in UTF-8");
   return buffer;
 }
 
