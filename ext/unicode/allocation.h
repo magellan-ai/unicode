@@ -3,8 +3,8 @@
 
 #include "ruby.h"
 
-void* buffer_malloc(size_t size);
-void* buffer_realloc(void* pointer, size_t size);
+void* buffer_malloc(size_t count, size_t size);
+void* buffer_realloc(void* pointer, size_t count, size_t size);
 void buffer_free(void* pointer);
 
 #ifdef UNICODE_FAULT_INJECTION

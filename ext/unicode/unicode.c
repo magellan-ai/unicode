@@ -700,6 +700,8 @@ decode_into(VALUE string, WString* buffer)
 {
   long length = RSTRING_LEN(string);
 
+  if (length == LONG_MAX)
+    rb_raise(rb_eArgError, "string too long to decode");
   WStr_allocCapacity(buffer, length + 1);
   WStr_decodeUTF8(buffer, RSTRING_PTR(string), length);
   return buffer;

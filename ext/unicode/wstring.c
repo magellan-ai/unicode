@@ -17,7 +17,7 @@ WStr_alloc(WString* str)
 WString*
 WStr_allocCapacity(WString* str, long capacity)
 {
-  str->str = (int*)buffer_malloc((size_t)capacity * sizeof(int));
+  str->str = (int*)buffer_malloc((size_t)capacity, sizeof(int));
   str->size = capacity;
   str->len = 0;
 
@@ -27,7 +27,7 @@ WStr_allocCapacity(WString* str, long capacity)
 WString*
 WStr_enlarge(WString* str, long size)
 {
-  str->str = (int*)buffer_realloc(str->str, (str->size + size) * sizeof(int));
+  str->str = (int*)buffer_realloc(str->str, (size_t)(str->size + size), sizeof(int));
   str->size += size;
 
   return str;

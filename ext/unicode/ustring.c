@@ -11,7 +11,7 @@
 UString*
 UniStr_alloc(UString* str)
 {
-  str->str = (unsigned char*)buffer_malloc(USTR_INITIAL_STRING_LEN);
+  str->str = (unsigned char*)buffer_malloc(USTR_INITIAL_STRING_LEN, 1);
   str->size = USTR_INITIAL_STRING_LEN;
   str->len = 0;
 
@@ -21,7 +21,7 @@ UniStr_alloc(UString* str)
 UString*
 UniStr_enlarge(UString* str, long size)
 {
-  str->str = (unsigned char*)buffer_realloc(str->str, str->size + size);
+  str->str = (unsigned char*)buffer_realloc(str->str, (size_t)(str->size + size), 1);
   str->size += size;
 
   return str;

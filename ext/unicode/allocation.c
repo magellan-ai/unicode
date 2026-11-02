@@ -27,23 +27,23 @@ count_allocation(void)
 #endif
 
 void*
-buffer_malloc(size_t size)
+buffer_malloc(size_t count, size_t size)
 {
   void* buffer;
 
   count_allocation();
-  buffer = ruby_xmalloc(size);
+  buffer = ruby_xmalloc2(count, size);
   track_buffer(1);
   return buffer;
 }
 
 void*
-buffer_realloc(void* pointer, size_t size)
+buffer_realloc(void* pointer, size_t count, size_t size)
 {
   void* buffer;
 
   count_allocation();
-  buffer = ruby_xrealloc(pointer, size);
+  buffer = ruby_xrealloc2(pointer, count, size);
   if (!pointer)
     track_buffer(1);
   return buffer;
