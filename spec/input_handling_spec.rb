@@ -40,6 +40,13 @@ RSpec.describe Unicode do
     expect(described_class.downcase(argument)).not_to equal(argument)
   end
 
+  it 'maps an empty string to an empty string' do
+    string_returning_methods.each do |method|
+      expect(described_class.public_send(method, '')).to eq('')
+    end
+    expect([described_class.categories(''), described_class.text_elements(''), described_class.width('')]).to eq([[], [], 0])
+  end
+
   it 'raises ArgumentError for bytes that are not valid UTF-8, like String#unicode_normalize' do
     invalid_bytes_message = 'invalid byte sequence in UTF-8'
 

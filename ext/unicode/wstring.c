@@ -3,7 +3,6 @@
  * By Yoshida Masato, 1999. See LICENSE.
  */
 
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "wstring.h"
@@ -71,33 +70,6 @@ WStr_pushWString(WString* s, const WString* add)
   }
   memcpy(s->str + s->len, add->str, add->len * sizeof(int));
   s->len += add->len;
-
-  return s->len;
-}
-
-int
-WStr_addWChar2(WString* s, int a1, int a2)
-{
-  if (s->len + 2 >= s->size) {
-    WStr_enlarge(s, WSTR_STRING_EXTEND_LEN);
-  }
-  *(s->str + s->len) = a1;
-  *(s->str + s->len + 1) = a2;
-  s->len += 2;
-
-  return s->len;
-}
-
-int
-WStr_addWChar3(WString* s, int a1, int a2, int a3)
-{
-  if (s->len + 3 >= s->size) {
-    WStr_enlarge(s, WSTR_STRING_EXTEND_LEN);
-  }
-  *(s->str + s->len) = a1;
-  *(s->str + s->len + 1) = a2;
-  *(s->str + s->len + 2) = a3;
-  s->len += 3;
 
   return s->len;
 }
@@ -177,16 +149,4 @@ WStr_convertIntoUString2(WString* wstr, int start, int len, UString* ustr)
   }
 
   return ustr;
-}
-
-void
-WStr_dump(WString* s)
-{
-  int i;
-
-  printf("[%d/%d] ", s->len, s->size);
-  for (i = 0; i < s->len ; i++) {
-    printf("%04x ", *(s->str + i));
-  }
-  printf("\n");
 }

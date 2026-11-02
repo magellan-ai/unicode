@@ -3,7 +3,6 @@
  * By Yoshida Masato, 1999. See LICENSE.
  */
 
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "ustring.h"
@@ -37,18 +36,6 @@ UniStr_free(UString* str)
     buffer_free(str->str);
     str->str = NULL;
   }
-}
-
-int
-UniStr_addChars(UString* s, const unsigned char* a, int len)
-{
-  if (s->len + len >= s->size) {
-    UniStr_enlarge(s, len + USTR_STRING_EXTEND_LEN);
-  }
-  memcpy(s->str + s->len, a, len);
-  s->len += len;
-
-  return s->len;
 }
 
 int
@@ -187,16 +174,4 @@ UniStr_addWChar(UString* ustr, unsigned int c)
   }
 
   return ustr->len;
-}
-
-void
-UniStr_dump(UString* s)
-{
-  int i;
-
-  printf("[%d/%d] ", s->len, s->size);
-  for (i = 0; i < s->len ; i++) {
-    printf("%02x ", *(s->str + i));
-  }
-  printf("\n");
 }

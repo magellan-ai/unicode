@@ -4,28 +4,14 @@
  */
 
 #include "ruby.h"
-#ifdef HAVE_RUBY_IO_H
-#  include "ruby/io.h"
-#else
-#  include "rubyio.h"
-#endif
-#include <stdio.h>
+#include "ruby/encoding.h"
 #include <stdlib.h>
 #include "wstring.h"
 #include "allocation.h"
 #include "unidata.map"
 
-#ifndef RSTRING_PTR
-#  define RSTRING_PTR(s) (RSTRING(s)->ptr)
-#  define RSTRING_LEN(s) (RSTRING(s)->len)
-#endif
-
-#ifdef HAVE_RUBY_ENCODING_H
 static rb_encoding* enc_out;
-#  define ENC_(o) (rb_enc_associate(o, enc_out))
-#else
-#  define ENC_(o) (o)
-#endif
+#define ENC_(o) (rb_enc_associate(o, enc_out))
 
 /*
  * Returns str as the valid UTF-8 String every entry point works on. UTF-8- and US-ASCII-tagged
@@ -564,13 +550,15 @@ static WString*
 compose_internal(WString* ustr, WString* result)
 {
   int starterPos = 0;
-  int starterCh = ustr->str[0];
+  int starterCh;
   int compPos = 1;
-  int lastClass = get_cc(starterCh);
+  int lastClass;
   int oldLen = ustr->len;
   int decompPos;
 
   if (oldLen == 0) return result;
+  starterCh = ustr->str[0];
+  lastClass = get_cc(starterCh);
   if (lastClass != 0) lastClass = 256;
   /* copy string */
   result->len = 0;
@@ -602,41 +590,6 @@ compose_internal(WString* ustr, WString* result)
   result->len = compPos;
   return result;
 }
-#if 0
-static WString*
-compose_internal(WString* ustr, WString* result)
-{
-  int len = ustr->len;
-  int starter;
-  int startercc;
-  int i;
-
-  if (len == 0) return result;
-
-  starter = ustr->str[0];
-  startercc = get_cc(starter);
-  if (startercc != 0) startercc = 256;
-  for (i = 1; i < len; i++) {
-    int ch = ustr->str[i];
-    int cc = get_cc(ch);
-    int composite;
-
-    if (startercc == 0 &&
-	(composite = compose_pair(starter, ch)) >= 0) {
-      starter = composite;
-      startercc = get_cc(composite);
-    }
-    else {
-      WStr_addWChar(result, starter);
-      starter = ch;
-      startercc = cc;
-    }
-  }
-  WStr_addWChar(result, starter);
-
-  return result;
-}
-#endif
 
 static WString*
 upcase_internal(WString* str, WString* result)
@@ -1092,13 +1045,11 @@ unicode_get_text_elements(VALUE obj, VALUE str)
 }
 
 void
-Init_unicode_native()
+Init_unicode_native(void)
 {
   int i;
 
-#ifdef HAVE_RUBY_ENCODING_H
   enc_out = rb_utf8_encoding();
-#endif
 
   mUnicode = rb_define_module("Unicode");
 #ifdef UNICODE_FAULT_INJECTION

@@ -13,9 +13,6 @@ extern "C" {
 #define USTR_INITIAL_STRING_LEN 1024
 #define USTR_STRING_EXTEND_LEN 1024
 
-/*#define malloc(s) xmalloc(s)*/
-/*#define relloc(p, s) xrelloc(p, s)*/
-
 typedef struct _UString {
   unsigned char* str;
   int len;
@@ -25,7 +22,6 @@ typedef struct _UString {
 UString* UniStr_alloc(UString* str);
 UString* UniStr_enlarge(UString* str, int size);
 void UniStr_free(UString* str);
-int UniStr_addChars(UString* s, const unsigned char* a, int len);
 int UniStr_addChar(UString* s, unsigned char a);
 int UniStr_addChar2(UString* s, unsigned char a1, unsigned char a2);
 int UniStr_addChar3(UString* s, unsigned char a1, unsigned char a2,
@@ -38,7 +34,6 @@ int UniStr_addChar6(UString* s, unsigned char a1, unsigned char a2,
 		  unsigned char a3, unsigned char a4,
 		  unsigned char a5, unsigned char a6);
 int UniStr_addWChar(UString* s, unsigned int c);
-void UniStr_dump(UString* s);
 
 #ifdef __cplusplus
 }
