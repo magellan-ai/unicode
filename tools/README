@@ -1,7 +1,12 @@
-The bundled unidata.map is created from UnicodeData.txt,
-DerivedNormalizationProps.txt, SpecialCasing.txt and EastAsianWidth.txt
-of Unicode 6.0.
+ext/unicode/unidata.map is generated from these files of the Unicode 6.2.0 Character Database
+(https://www.unicode.org/Public/6.2.0/ucd/): UnicodeData.txt, DerivedNormalizationProps.txt, SpecialCasing.txt and
+EastAsianWidth.txt.
 
-To update unidata.map,
+To regenerate it, from the repository root:
 
-  ruby mkunidata.rb UnicodeData.txt DerivedNormalizationProps.txt SpecialCasing.txt EastAsianWidth.txt  > unidata.map
+  ruby tools/mkunidata.rb UnicodeData.txt DerivedNormalizationProps.txt SpecialCasing.txt EastAsianWidth.txt > ext/unicode/unidata.map
+
+Run against the 6.2.0 files, this reproduces the committed unidata.map byte for byte, and
+spec/unidata_generator_spec.rb checks that it still does, using gzipped copies of the four files in
+spec/fixtures/ucd-6.2.0/ (development-only; they aren't packaged in the gem). Moving to a newer Unicode version
+changes the extension's output, and spec/ruby_parity_spec.rb pins the 6.2 behavior.

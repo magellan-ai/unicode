@@ -1,6 +1,4 @@
-begin
-  require "unicode/#{RUBY_VERSION[/\d+.\d+/]}/unicode_native"
-rescue LoadError => err
-  raise if err.respond_to?(:path) && !err.path
-  require 'unicode/unicode_native'
-end
+# frozen_string_literal: true
+
+require 'unicode/version'
+require 'unicode/unicode_native'

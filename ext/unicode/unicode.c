@@ -8,8 +8,6 @@
  *
  */
 
-#define UNICODE_VERSION "0.4.3"
-
 #include "ruby.h"
 #ifdef HAVE_RUBY_IO_H
 #  include "ruby/io.h"
@@ -1324,7 +1322,4 @@ Init_unicode_native()
 			    unicode_wcswidth, -1);
   rb_define_module_function(mUnicode, "text_elements",
 			    unicode_get_text_elements, 1);
-
-  rb_define_const(mUnicode, "VERSION",
-		  rb_str_new2(UNICODE_VERSION));
 }

@@ -1,0 +1,91 @@
+version: 2.1
+
+executors:
+  ruby:
+    parameters:
+      ruby_version:
+        description: 'Tag of the cimg/ruby image to run on'
+        type: string
+    docker:
+      - image: cimg/ruby:<< parameters.ruby_version >>
+
+commands:
+  bundle_install:
+    description: 'Install gems, restoring them from cache when the dependency declarations are unchanged'
+    parameters:
+      ruby_version:
+        description: 'Included in the cache key so gems built against one Ruby are never restored into another'
+        type: string
+    steps:
+      # A library does not commit Gemfile.lock, so the dependency declarations themselves
+      # are the only stable cache key available.
+      - restore_cache:
+          keys:
+            - unicode-bundle-v1-ruby<< parameters.ruby_version >>-{{ checksum "Gemfile" }}-{{ checksum "unicode.gemspec" }}
+            - unicode-bundle-v1-ruby<< parameters.ruby_version >>-
+
+      - run:
+          name: Bundle install
+          command: |
+            bundle config set --local path vendor/bundle
+            bundle install --jobs 4 --retry 3
+
+      - save_cache:
+          key: unicode-bundle-v1-ruby<< parameters.ruby_version >>-{{ checksum "Gemfile" }}-{{ checksum "unicode.gemspec" }}
+          paths:
+            - vendor/bundle
+
+jobs:
+  spec:
+    parameters:
+      ruby_version:
+        type: string
+    executor:
+      name: ruby
+      ruby_version: << parameters.ruby_version >>
+    steps:
+      - checkout
+
+      - run:
+          name: Ruby version
+          command: ruby --version
+
+      - bundle_install:
+          ruby_version: << parameters.ruby_version >>
+
+      - run:
+          name: Compile extension
+          command: bundle exec rake compile
+
+      - run:
+          name: RSpec
+          command: bundle exec rspec
+
+      - store_artifacts:
+          path: coverage
+          destination: coverage-ruby-<< parameters.ruby_version >>
+
+  rubocop:
+    executor:
+      name: ruby
+      ruby_version: '4.0'
+    steps:
+      - checkout
+
+      - bundle_install:
+          ruby_version: '4.0'
+
+      - run:
+          name: RuboCop
+          command: bundle exec rubocop
+
+workflows:
+  build:
+    jobs:
+      - spec:
+          name: spec-ruby-<< matrix.ruby_version >>
+          matrix:
+            parameters:
+              ruby_version: ['3.3', '3.4', '4.0']
+
+      - rubocop
