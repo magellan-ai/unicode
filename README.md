@@ -4,7 +4,9 @@ Unicode normalization, case mapping, and character properties for Ruby, as a C e
 
 This is [Magellan AI](https://www.magellan.ai)'s maintained fork of the [`unicode`](https://rubygems.org/gems/unicode)
 gem, written by Yoshida Masato and previously packaged by [blackwinter](https://github.com/blackwinter/unicode). We
-keep it working on current Ruby: a real test suite, modern packaging, and fixes to the C extension.
+keep it working on current Ruby: a real test suite, modern packaging, and fixes to the C extension. The original
+author's site is no longer online, but its last version is
+[archived on the Wayback Machine](https://web.archive.org/web/20130509170942/http://www.yoshidam.net/Ruby.html#unicode).
 
 ## Should you use it?
 
@@ -26,7 +28,7 @@ It needs Ruby 3.3 or newer and a C compiler.
 Every function is a module function on `Unicode`. Each takes a `String` and returns a new UTF-8 string (or an array,
 or an integer). UTF-8 and US-ASCII strings are read as UTF-8; input in any other encoding is transcoded to UTF-8 first.
 Bytes that aren't valid UTF-8 raise `ArgumentError` (as `String#unicode_normalize` does), and anything that isn't a
-`String` raises `TypeError`.
+`String` raises `TypeError`. Every function is safe to call from any Ractor.
 
 ### Normalization
 
@@ -109,12 +111,16 @@ Ruby's own (newer) implementation, see [`spec/ruby_parity_spec.rb`](spec/ruby_pa
 ```sh
 bundle install
 bundle exec rake                     # compiles the extension and runs the specs
+bundle exec rubocop
+bundle exec rake spec:sanitized      # the specs under AddressSanitizer and UndefinedBehaviorSanitizer (Linux)
 bundle exec rake compile_commands    # lets clangd-based editors find the Ruby headers
 ```
 
-Besides per-function specs, the suite runs the Unicode 6.2 `NormalizationTest.txt` conformance tests and compares
-every codepoint against Ruby's own implementation. `tools/mkunidata.rb` regenerates `ext/unicode/unidata.map` from
-the Unicode Character Database; see [`tools/README`](tools/README).
+Besides per-function specs, the suite runs the Unicode 6.2 `NormalizationTest.txt` conformance tests, compares every
+codepoint against Ruby's own implementation, and checks the extension under GC stress and from several Ractors. The
+sanitizer build also makes each memory allocation fail in turn, to check that nothing leaks or corrupts memory when one
+does. [`CONTRIBUTING.md`](CONTRIBUTING.md) covers what a pull request needs. `tools/mkunidata.rb` regenerates
+`ext/unicode/unidata.map` from the Unicode Character Database; see [`tools/README`](tools/README).
 
 ## License
 
@@ -124,7 +130,21 @@ conditions. The Unicode Character Database data it's built from is under the Uni
 
 ## History
 
-This fork's changes are in the git log. Upstream releases by Yoshida Masato:
+**0.5.0** (this fork):
+
+- Requires Ruby 3.3 or newer. The JRuby version and the prebuilt Windows gems are gone.
+- Looks characters up in plain C tables instead of Ruby hashes. That fixes a failure in which a process could boot
+  with its tables broken, so that every call raised errors such as
+  `undefined method 'default' for an instance of String` until the process exited. It also makes `downcase` and
+  normalization faster.
+- Bytes that aren't valid UTF-8 raise `ArgumentError` instead of being silently dropped, along with the rest of the
+  string.
+- `strcmp` and `strcmp_compat` compare past embedded NULs and return `-1`, `0`, or `1` instead of a byte difference.
+- Running out of memory raises `NoMemoryError` instead of corrupting memory, and no call leaks memory when it raises.
+- Every function is safe to call from any Ractor.
+- `Unicode::VERSION` now matches the gem's version.
+
+Upstream releases by Yoshida Masato:
 
 - **0.4.4** (2013-02-07): updated the data to Unicode 6.2
 - **0.4.3** (2012-08-08): added `categories`, `text_elements`, and `width`

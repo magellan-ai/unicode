@@ -6,7 +6,7 @@ Gem::Specification.new do |s|
   s.name = 'unicode'
   s.version = Unicode::VERSION
   s.authors = ['Yoshida Masato', 'Ryan Kerr']
-  s.email = %w[yoshidam@yoshidam.net ryan@magellan.ai]
+  s.email = 'ryan@magellan.ai'
   s.homepage = 'https://github.com/magellan-ai/unicode'
   s.license = 'Ruby'
   s.summary = 'Unicode normalization, case mapping, and character properties.'
