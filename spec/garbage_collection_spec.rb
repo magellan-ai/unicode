@@ -21,7 +21,7 @@ RSpec.describe Unicode do
     script = <<~RUBY
       require 'unicode'
 
-      iso_8859_1_text = ([0xC0, 0x62, 0xE9, 0x20].pack('C*') * 10).force_encoding('ISO-8859-1')
+      iso_8859_1_text = ([0xC0, 0x62, 0xE9, 0x20].pack('C*') * 300).force_encoding('ISO-8859-1')
       calls = [
         ->(text) { Unicode.downcase(text) },
         ->(text) { Unicode.nfc(text) },

@@ -24,7 +24,8 @@ namespace :spec do
 
     sanitized = { 'UNICODE_SANITIZE' => '1' }
     sh(sanitized, RbConfig.ruby, '-S', 'rake', 'clobber', 'compile')
-    sh(sanitized.merge('LD_PRELOAD' => asan_runtime, 'ASAN_OPTIONS' => 'detect_leaks=0'), RbConfig.ruby, '-S', 'rspec')
+    asan_options = 'detect_leaks=0:detect_stack_use_after_return=0'
+    sh(sanitized.merge('LD_PRELOAD' => asan_runtime, 'ASAN_OPTIONS' => asan_options), RbConfig.ruby, '-S', 'rspec')
   ensure
     Rake::Task[:clobber].execute
   end
