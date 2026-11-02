@@ -698,7 +698,10 @@ call_with_buffers(VALUE (*work)(VALUE), struct call* call)
 static WString*
 decode_into(VALUE string, WString* buffer)
 {
-  WStr_allocWithUTF8L(buffer, RSTRING_PTR(string), RSTRING_LEN(string));
+  long length = RSTRING_LEN(string);
+
+  WStr_allocCapacity(buffer, length + 1);
+  WStr_decodeUTF8(buffer, RSTRING_PTR(string), length);
   return buffer;
 }
 

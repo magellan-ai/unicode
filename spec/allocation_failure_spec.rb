@@ -15,4 +15,11 @@ RSpec.describe Unicode, if: defined?(Unicode::FaultInjection) do
 
     expect(leaks).to eq([])
   end
+
+  it 'reserves the whole decode buffer before reading the argument, so decoding never allocates' do
+    decode_only_calls = AllocationFailureSweep::CALLS.slice(:width, :categories)
+
+    expect(decode_only_calls.transform_values { |call| AllocationFailureSweep.allocations_made_by(call) })
+      .to eq(width: 1, categories: 1)
+  end
 end

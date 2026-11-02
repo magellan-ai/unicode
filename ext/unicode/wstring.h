@@ -22,7 +22,8 @@ typedef struct _WString {
 } WString;
 
 WString* WStr_alloc(WString* str);
-WString* WStr_allocWithUTF8L(WString* s, const char* u, long len);
+WString* WStr_allocCapacity(WString* str, long capacity);
+WString* WStr_decodeUTF8(WString* s, const char* u, long len);
 WString* WStr_enlarge(WString* str, long size);
 void WStr_free(WString* str);
 long WStr_addWChars(WString* s, const int* a, long len);

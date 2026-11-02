@@ -11,8 +11,14 @@
 WString*
 WStr_alloc(WString* str)
 {
-  str->str = (int*)buffer_malloc(WSTR_INITIAL_STRING_LEN * sizeof(int));
-  str->size = WSTR_INITIAL_STRING_LEN;
+  return WStr_allocCapacity(str, WSTR_INITIAL_STRING_LEN);
+}
+
+WString*
+WStr_allocCapacity(WString* str, long capacity)
+{
+  str->str = (int*)buffer_malloc((size_t)capacity * sizeof(int));
+  str->size = capacity;
   str->len = 0;
 
   return str;
@@ -74,14 +80,14 @@ WStr_pushWString(WString* s, const WString* add)
   return s->len;
 }
 
+/* Appends the codepoints of len bytes of UTF-8 to s, which must have room for len more. Never allocates. */
 WString*
-WStr_allocWithUTF8L(WString* s, const char* in, long len)
+WStr_decodeUTF8(WString* s, const char* in, long len)
 {
   long i;
   int u = 0;
   int rest = 0;
 
-  WStr_alloc(s);
   if (in == NULL)
     return s;
   for (i = 0; i < len; i++) {
