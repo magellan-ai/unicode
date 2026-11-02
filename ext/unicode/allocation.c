@@ -8,6 +8,7 @@
 #include "allocation.h"
 
 #ifdef UNICODE_FAULT_INJECTION
+/* NOT Ractor-safe, BUT this is only used in sanitizer builds, which can't run Ractors anyway. */
 static long allocations_until_failure;
 static long allocation_count;
 static long live_buffers;

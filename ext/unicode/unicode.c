@@ -1049,6 +1049,7 @@ Init_unicode_native(void)
 {
   int i;
 
+  rb_ext_ractor_safe(true);
   enc_out = rb_utf8_encoding();
 
   mUnicode = rb_define_module("Unicode");
