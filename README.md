@@ -108,7 +108,8 @@ Ruby's own (newer) implementation, see [`spec/ruby_parity_spec.rb`](spec/ruby_pa
 
 ```sh
 bundle install
-bundle exec rake    # compiles the extension and runs the specs
+bundle exec rake                     # compiles the extension and runs the specs
+bundle exec rake compile_commands    # lets clangd-based editors find the Ruby headers
 ```
 
 Besides per-function specs, the suite runs the Unicode 6.2 `NormalizationTest.txt` conformance tests and compares

@@ -22,6 +22,7 @@ source ~/.rvm/scripts/rvm && rvm use ruby-4.0.6@unicode &&
 Examples (shown with RVM prefix — omit the prefix for rbenv):
 - `source ~/.rvm/scripts/rvm && rvm use ruby-4.0.6@unicode && bundle exec rake` (compiles the extension, then runs the specs)
 - `source ~/.rvm/scripts/rvm && rvm use ruby-4.0.6@unicode && bundle exec rubocop`
+- `source ~/.rvm/scripts/rvm && rvm use ruby-4.0.6@unicode && bundle exec rake compile_commands` (writes the gitignored `compile_commands.json`, so clangd finds the Ruby headers; rerun after switching Rubies)
 
 ## Conventions
 

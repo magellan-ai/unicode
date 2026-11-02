@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'bundler/gem_tasks'
+require 'json'
 require 'rake/clean'
 require 'rake/extensiontask'
 require 'rspec/core/rake_task'
@@ -31,5 +32,16 @@ namespace :spec do
 end
 
 RuboCop::RakeTask.new
+
+desc 'Write compile_commands.json, so editors using clangd can find the Ruby headers'
+task :compile_commands do
+  ruby_headers = RbConfig::CONFIG.values_at('rubyhdrdir', 'rubyarchhdrdir').map { |directory| "-I#{directory}" }
+  commands =
+    Dir['ext/unicode/*.c'].map do |source|
+      { directory: __dir__, file: File.expand_path(source, __dir__), arguments: ['cc', *ruby_headers, '-Iext/unicode', '-c', source] }
+    end
+
+  File.write('compile_commands.json', "#{JSON.pretty_generate(commands)}\n")
+end
 
 task default: %i[compile spec]
