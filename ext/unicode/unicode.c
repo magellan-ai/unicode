@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "wstring.h"
+#include "allocation.h"
 #include "unidata.map"
 
 #ifndef RSTRING_PTR
@@ -25,15 +26,6 @@ static rb_encoding* enc_out;
 #else
 #  define ENC_(o) (o)
 #endif
-
-inline static VALUE
-taintObject(VALUE src, VALUE obj) {
-  // deprecated: taintedness turned out to be a wrong idea
-  //if (OBJ_TAINTED(src))
-  //  OBJ_TAINT(obj);
-  return obj;
-}
-#define TO_(src, obj) (taintObject(src, obj))
 
 /*
  * Returns str as the valid UTF-8 String every entry point works on. UTF-8- and US-ASCII-tagged
@@ -292,6 +284,87 @@ get_composition(int first, int second)
 }
 
 /*
+ * Mappings (decompositions and case mappings in unidata.map) are decoded into stack arrays of this
+ * many codepoints, so helpers never heap-allocate a temporary that a raise could leak. The longest
+ * mapping in the Unicode 6.2 data is 18 codepoints (the compatibility decomposition of U+FDFA);
+ * check_mapping_lengths refuses to load data with one longer than this.
+ */
+#define MAPPING_CAPACITY 32
+
+static int
+decode_mapping(const char* utf8, int codepoints[MAPPING_CAPACITY])
+{
+  const unsigned char* p = (const unsigned char*)utf8;
+  int count = 0;
+
+  while (*p && count < MAPPING_CAPACITY) {
+    int codepoint;
+    int continuation_bytes;
+
+    if (*p < 0x80) {
+      codepoint = *p;
+      continuation_bytes = 0;
+    }
+    else if (*p < 0xE0) {
+      codepoint = *p & 0x1F;
+      continuation_bytes = 1;
+    }
+    else if (*p < 0xF0) {
+      codepoint = *p & 0x0F;
+      continuation_bytes = 2;
+    }
+    else {
+      codepoint = *p & 0x07;
+      continuation_bytes = 3;
+    }
+    p++;
+    while (continuation_bytes-- > 0 && *p)
+      codepoint = (codepoint << 6) | (*p++ & 0x3F);
+    codepoints[count++] = codepoint;
+  }
+  return count;
+}
+
+static int
+mapping_length(const char* utf8)
+{
+  const unsigned char* p;
+  int length = 0;
+
+  for (p = (const unsigned char*)utf8; p && *p; p++) {
+    if ((*p & 0xC0) != 0x80)
+      length++;
+  }
+  return length;
+}
+
+static void
+check_mapping_lengths(void)
+{
+  size_t i;
+
+  for (i = 0; i < UNIDATA_COUNT; i++) {
+    const char* mappings[] = {
+      unidata[i].canon, unidata[i].compat, unidata[i].uppercase, unidata[i].lowercase, unidata[i].titlecase
+    };
+    size_t m;
+
+    for (m = 0; m < sizeof(mappings) / sizeof(mappings[0]); m++) {
+      if (mapping_length(mappings[m]) > MAPPING_CAPACITY)
+        rb_raise(rb_eRuntimeError, "unidata.map maps U+%04X to more than %d codepoints", unidata[i].code, MAPPING_CAPACITY);
+    }
+  }
+}
+
+static void
+append_mapping(WString* result, const char* utf8)
+{
+  int mapping[MAPPING_CAPACITY];
+
+  WStr_addWChars(result, mapping, decode_mapping(utf8, mapping));
+}
+
+/*
  * Every canonical decomposition that may be recomposed (no composition exclusion) is exactly two
  * codepoints in Unicode 6.2; compose_pair only ever asks about two, so any other length is skipped.
  * The table is allocated once and kept for the life of the process. ALLOC_N raises NoMemoryError
@@ -310,18 +383,16 @@ build_composition_pairs(void)
 
   composition_pairs = ALLOC_N(struct composition_pair, capacity);
   for (i = 0; i < UNIDATA_COUNT; i++) {
-    WString decomposition;
+    int decomposition[MAPPING_CAPACITY];
 
     if (!unidata[i].canon || unidata[i].exclusion)
       continue;
-    WStr_allocWithUTF8(&decomposition, unidata[i].canon);
-    if (decomposition.len == 2) {
-      composition_pairs[composition_pair_count].first = decomposition.str[0];
-      composition_pairs[composition_pair_count].second = decomposition.str[1];
+    if (decode_mapping(unidata[i].canon, decomposition) == 2) {
+      composition_pairs[composition_pair_count].first = decomposition[0];
+      composition_pairs[composition_pair_count].second = decomposition[1];
       composition_pairs[composition_pair_count].composite = unidata[i].code;
       composition_pair_count++;
     }
-    WStr_free(&decomposition);
   }
   qsort(composition_pairs, composition_pair_count, sizeof(struct composition_pair), compare_composition_pairs);
 }
@@ -390,10 +461,10 @@ decompose_internal(WString* ustr, WString* result)
 	WStr_addWChar(result, ucs);
       }
       else {
-	WString wdc;
-	WStr_allocWithUTF8(&wdc, dc);
-	decompose_internal(&wdc, result);
-	WStr_free(&wdc);
+	int mapping[MAPPING_CAPACITY];
+	WString decomposition = { .str = mapping, .len = decode_mapping(dc, mapping), .size = MAPPING_CAPACITY };
+
+	decompose_internal(&decomposition, result);
       }
     }
   }
@@ -424,10 +495,10 @@ decompose_safe_internal(WString* ustr, WString* result)
 	WStr_addWChar(result, ucs);
       }
       else {
-	WString wdc;
-	WStr_allocWithUTF8(&wdc, dc);
-	decompose_safe_internal(&wdc, result);
-	WStr_free(&wdc);
+	int mapping[MAPPING_CAPACITY];
+	WString decomposition = { .str = mapping, .len = decode_mapping(dc, mapping), .size = MAPPING_CAPACITY };
+
+	decompose_safe_internal(&decomposition, result);
       }
     }
   }
@@ -458,10 +529,10 @@ decompose_compat_internal(WString* ustr, WString* result)
 	WStr_addWChar(result, ucs);
       }
       else {
-	WString wdc;
-	WStr_allocWithUTF8(&wdc, dc);
-	decompose_compat_internal(&wdc, result);
-	WStr_free(&wdc);
+	int mapping[MAPPING_CAPACITY];
+	WString decomposition = { .str = mapping, .len = decode_mapping(dc, mapping), .size = MAPPING_CAPACITY };
+
+	decompose_compat_internal(&decomposition, result);
       }
     }
   }
@@ -580,10 +651,7 @@ upcase_internal(WString* str, WString* result)
       WStr_addWChar(result, ucs);
     }
     else {
-      WString wc;
-      WStr_allocWithUTF8(&wc, c);
-      WStr_pushWString(result, &wc);
-      WStr_free(&wc);
+      append_mapping(result, c);
     }
   }
   return result;
@@ -602,10 +670,7 @@ downcase_internal(WString* str, WString* result)
       WStr_addWChar(result, ucs);
     }
     else {
-      WString wc;
-      WStr_allocWithUTF8(&wc, c);
-      WStr_pushWString(result, &wc);
-      WStr_free(&wc);
+      append_mapping(result, c);
     }
   }
   return result;
@@ -623,10 +688,7 @@ capitalize_internal(WString* str,  WString* result)
       WStr_addWChar(result, str->str[0]);
     }
     else {
-      WString wc;
-      WStr_allocWithUTF8(&wc, c);
-      WStr_pushWString(result, &wc);
-      WStr_free(&wc);
+      append_mapping(result, c);
     }
   }
   for (i = 1; i < len; i++) {
@@ -636,14 +698,88 @@ capitalize_internal(WString* str,  WString* result)
       WStr_addWChar(result, ucs);
     }
     else {
-      WString wc;
-      WStr_allocWithUTF8(&wc, c);
-      WStr_pushWString(result, &wc);
-      WStr_free(&wc);
+      append_mapping(result, c);
     }
   }
   return result;
 }
+
+struct transform_steps {
+  WString* (*first)(WString*, WString*);
+  int sort;
+  WString* (*second)(WString*, WString*);
+};
+
+struct call {
+  VALUE string;
+  VALUE other_string;
+  VALUE original;
+  const struct transform_steps* steps;
+  const VALUE* category_names;
+  int cjk;
+  WString wide[6];
+  UString utf8;
+};
+
+static VALUE
+free_call_buffers(VALUE argument)
+{
+  struct call* call = (struct call*)argument;
+  size_t i;
+
+  for (i = 0; i < sizeof(call->wide) / sizeof(call->wide[0]); i++)
+    WStr_free(&call->wide[i]);
+  UniStr_free(&call->utf8);
+  return Qnil;
+}
+
+static VALUE
+call_with_buffers(VALUE (*work)(VALUE), struct call* call)
+{
+  return rb_ensure(work, (VALUE)call, free_call_buffers, (VALUE)call);
+}
+
+static WString*
+decode_into(VALUE string, WString* buffer)
+{
+  WStr_allocWithUTF8L(buffer, RSTRING_PTR(string), RSTRING_LEN(string));
+  return buffer;
+}
+
+static WString*
+apply_step(WString* (*step)(WString*, WString*), WString* input, WString* output)
+{
+  WStr_alloc(output);
+  step(input, output);
+  WStr_free(input);
+  return output;
+}
+
+/* Decodes string into slots[0] and applies steps, putting each step's result in the next slot. */
+static WString*
+transform_into(VALUE string, const struct transform_steps* steps, WString slots[3])
+{
+  WString* current = decode_into(string, &slots[0]);
+
+  if (steps->first)
+    current = apply_step(steps->first, current, &slots[1]);
+  if (steps->sort)
+    sort_canonical(current);
+  if (steps->second)
+    current = apply_step(steps->second, current, &slots[2]);
+  return current;
+}
+
+static const struct transform_steps decompose_steps = { decompose_internal, 1, NULL };
+static const struct transform_steps decompose_safe_steps = { decompose_safe_internal, 1, NULL };
+static const struct transform_steps decompose_compat_steps = { decompose_compat_internal, 1, NULL };
+static const struct transform_steps compose_steps = { NULL, 1, compose_internal };
+static const struct transform_steps normalize_C_steps = { decompose_internal, 1, compose_internal };
+static const struct transform_steps normalize_safe_steps = { decompose_safe_internal, 1, compose_internal };
+static const struct transform_steps normalize_KC_steps = { decompose_compat_internal, 1, compose_internal };
+static const struct transform_steps upcase_steps = { upcase_internal, 0, NULL };
+static const struct transform_steps downcase_steps = { downcase_internal, 0, NULL };
+static const struct transform_steps capitalize_steps = { capitalize_internal, 0, NULL };
 
 /* Codepoint order is UTF-8 byte order, so this orders strings the way comparing their UTF-8 bytes does. */
 static int
@@ -661,100 +797,61 @@ compare_codepoints(const WString* a, const WString* b)
   return a->len < b->len ? -1 : 1;
 }
 
-/*
- * Compares the canonically ordered decompositions of two strings, returning -1, 0, or 1. Only
- * utf8_argument can raise, and it runs before any buffer is allocated; nothing after it calls the
- * Ruby API, so the buffers are always freed.
- */
 static VALUE
-compare_decompositions(VALUE str1, VALUE str2, WString* (*decompose)(WString*, WString*))
+compare_work(VALUE argument)
 {
-  WString wstr1;
-  WString wstr2;
-  WString result1;
-  WString result2;
-  int order;
+  struct call* call = (struct call*)argument;
+  const WString* left;
+  const WString* right;
 
-  str1 = utf8_argument(str1);
-  str2 = utf8_argument(str2);
-  WStr_allocWithUTF8L(&wstr1, RSTRING_PTR(str1), RSTRING_LEN(str1));
-  WStr_allocWithUTF8L(&wstr2, RSTRING_PTR(str2), RSTRING_LEN(str2));
-  WStr_alloc(&result1);
-  WStr_alloc(&result2);
-  decompose(&wstr1, &result1);
-  decompose(&wstr2, &result2);
-  WStr_free(&wstr1);
-  WStr_free(&wstr2);
-  sort_canonical(&result1);
-  sort_canonical(&result2);
-  order = compare_codepoints(&result1, &result2);
-  WStr_free(&result1);
-  WStr_free(&result2);
+  call->string = utf8_argument(call->string);
+  call->other_string = utf8_argument(call->other_string);
+  left = transform_into(call->string, call->steps, &call->wide[0]);
+  right = transform_into(call->other_string, call->steps, &call->wide[3]);
+  return INT2FIX(compare_codepoints(left, right));
+}
 
-  return INT2FIX(order);
+/* Compares the canonically ordered decompositions of two strings, returning -1, 0, or 1. */
+static VALUE
+compare_decompositions(VALUE str1, VALUE str2, const struct transform_steps* decompose)
+{
+  struct call call = { .string = str1, .other_string = str2, .steps = decompose };
+
+  return call_with_buffers(compare_work, &call);
 }
 
 static VALUE
 unicode_strcmp(VALUE obj, VALUE str1, VALUE str2)
 {
-  return compare_decompositions(str1, str2, decompose_internal);
+  return compare_decompositions(str1, str2, &decompose_steps);
 }
 
 static VALUE
 unicode_strcmp_compat(VALUE obj, VALUE str1, VALUE str2)
 {
-  return compare_decompositions(str1, str2, decompose_compat_internal);
+  return compare_decompositions(str1, str2, &decompose_compat_steps);
 }
 
-struct transform_steps {
-  WString* (*first)(WString*, WString*);
-  int sort;
-  WString* (*second)(WString*, WString*);
-};
+static VALUE
+transform_work(VALUE argument)
+{
+  struct call* call = (struct call*)argument;
+  const WString* result;
+
+  call->string = utf8_argument(call->string);
+  result = transform_into(call->string, call->steps, call->wide);
+  UniStr_alloc(&call->utf8);
+  WStr_convertIntoUString((WString*)result, &call->utf8);
+  return ENC_(rb_str_new((char*)call->utf8.str, call->utf8.len));
+}
 
 static VALUE
 transform_string(VALUE str, const struct transform_steps* steps)
 {
-  WString current;
-  WString next;
-  UString utf8;
-  VALUE result;
+  struct call call = { .string = str, .steps = steps };
 
-  str = utf8_argument(str);
-  WStr_allocWithUTF8L(&current, RSTRING_PTR(str), RSTRING_LEN(str));
-  if (steps->first) {
-    WStr_alloc(&next);
-    steps->first(&current, &next);
-    WStr_free(&current);
-    current = next;
-  }
-  if (steps->sort)
-    sort_canonical(&current);
-  if (steps->second) {
-    WStr_alloc(&next);
-    steps->second(&current, &next);
-    WStr_free(&current);
-    current = next;
-  }
-  UniStr_alloc(&utf8);
-  WStr_convertIntoUString(&current, &utf8);
-  WStr_free(&current);
-  result = ENC_(rb_str_new((char*)utf8.str, utf8.len));
-  UniStr_free(&utf8);
-
-  return result;
+  return call_with_buffers(transform_work, &call);
 }
-
-static const struct transform_steps decompose_steps = { decompose_internal, 1, NULL };
-static const struct transform_steps decompose_safe_steps = { decompose_safe_internal, 1, NULL };
-static const struct transform_steps decompose_compat_steps = { decompose_compat_internal, 1, NULL };
-static const struct transform_steps compose_steps = { NULL, 1, compose_internal };
-static const struct transform_steps normalize_C_steps = { decompose_internal, 1, compose_internal };
-static const struct transform_steps normalize_safe_steps = { decompose_safe_internal, 1, compose_internal };
-static const struct transform_steps normalize_KC_steps = { decompose_compat_internal, 1, compose_internal };
-static const struct transform_steps upcase_steps = { upcase_internal, 0, NULL };
-static const struct transform_steps downcase_steps = { downcase_internal, 0, NULL };
-static const struct transform_steps capitalize_steps = { capitalize_internal, 0, NULL };
 
 static VALUE
 unicode_decompose(VALUE obj, VALUE str)
@@ -816,91 +913,60 @@ unicode_capitalize(VALUE obj, VALUE str)
   return transform_string(str, &capitalize_steps);
 }
 
-typedef struct _get_categories_param {
-  WString* wstr;
-  VALUE str;
-  VALUE* catname;
-} get_categories_param;
+static void
+deliver(VALUE elements, int block_given, VALUE element)
+{
+  if (block_given)
+    rb_yield(element);
+  else
+    rb_ary_push(elements, element);
+}
 
 static VALUE
-get_categories_internal(VALUE param_value)
+categories_work(VALUE argument)
 {
-  get_categories_param* param = (get_categories_param*)param_value;
-  WString* wstr = param->wstr;
-  VALUE str = param->str;
-  VALUE* catname = param->catname;
-  int pos;
-  int block_p = rb_block_given_p();
-  volatile VALUE ret = str;
+  struct call* call = (struct call*)argument;
+  int block_given = rb_block_given_p();
+  const WString* text;
+  VALUE categories;
+  int i;
 
-  if (!block_p)
-    ret = rb_ary_new();
-  for (pos = 0; pos < wstr->len; pos++) {
-    int gencat = get_gencat(wstr->str[pos]);
-    if (!block_p)
-      rb_ary_push(ret, catname[gencat]);
-    else {
-      rb_yield(catname[gencat]);
-    }
-  }
- 
-  return ret;
+  call->string = utf8_argument(call->string);
+  text = decode_into(call->string, &call->wide[0]);
+  categories = block_given ? call->original : rb_ary_new();
+  for (i = 0; i < text->len; i++)
+    deliver(categories, block_given, call->category_names[get_gencat(text->str[i])]);
+  return categories;
 }
 
-VALUE
-get_categories_ensure(VALUE wstr_value)
-{
-  WString* wstr = (WString*)wstr_value;
-  WStr_free(wstr);
-  return Qnil;
-}
-
-VALUE
+static VALUE
 unicode_get_categories(VALUE obj, VALUE str)
 {
-  WString wstr;
-  get_categories_param param = { &wstr, str, catname_long };
+  struct call call = { .string = str, .original = str, .category_names = catname_long };
 
-  str = utf8_argument(str);
-  WStr_allocWithUTF8L(&wstr, RSTRING_PTR(str), RSTRING_LEN(str));
-
-  return rb_ensure(get_categories_internal, (VALUE)&param,
-                   get_categories_ensure, (VALUE)&wstr);
-  /* wstr will be freed in get_text_elements_ensure() */
+  return call_with_buffers(categories_work, &call);
 }
 
-
-VALUE
+static VALUE
 unicode_get_abbr_categories(VALUE obj, VALUE str)
 {
-  WString wstr;
-  get_categories_param param = { &wstr, str, catname_abbr };
+  struct call call = { .string = str, .original = str, .category_names = catname_abbr };
 
-  str = utf8_argument(str);
-  WStr_allocWithUTF8L(&wstr, RSTRING_PTR(str), RSTRING_LEN(str));
-
-  return rb_ensure(get_categories_internal, (VALUE)&param,
-                   get_categories_ensure, (VALUE)&wstr);
-  /* wstr will be freed in get_text_elements_ensure() */
+  return call_with_buffers(categories_work, &call);
 }
 
-VALUE
-unicode_wcswidth(int argc, VALUE* argv, VALUE obj)
+static VALUE
+width_work(VALUE argument)
 {
-  WString wstr;
-  int i, count;
+  struct call* call = (struct call*)argument;
+  const WString* text;
   int width = 0;
-  int cjk_p = 0;
-  VALUE str;
-  VALUE cjk;
+  int i;
 
-  count = rb_scan_args(argc, argv, "11", &str, &cjk);
-  if (count > 1)
-    cjk_p = RTEST(cjk);
-  str = utf8_argument(str);
-  WStr_allocWithUTF8L(&wstr, RSTRING_PTR(str), RSTRING_LEN(str));
-  for (i = 0; i <wstr.len; i++) {
-    int c = wstr.str[i];
+  call->string = utf8_argument(call->string);
+  text = decode_into(call->string, &call->wide[0]);
+  for (i = 0; i < text->len; i++) {
+    int c = text->str[i];
     int cat = get_gencat(c);
     int eaw = get_eawidth(c);
     if ((c > 0 && c < 32) || (c >= 0x7f && c < 0xa0)) {
@@ -924,46 +990,48 @@ unicode_wcswidth(int argc, VALUE* argv, VALUE obj)
              (c >= 0x2b81e && c <= 0x2f7ff) || /* CJK Reserved */
              (c >= 0x2fa1e && c <= 0x2fffd) || /* CJK Reserved */
              (c >= 0x30000 && c <= 0x3fffd) || /* CJK Reserved */
-             (cjk_p && eaw == w_A)) /* East Asian Ambiguous */
+             (call->cjk && eaw == w_A)) /* East Asian Ambiguous */
       width += 2;
     else
       width++; /* Halfwidth or Neutral */
   }
-  WStr_free(&wstr);
-
   return INT2FIX(width);
 }
 
-VALUE
-wstring_to_rstring(WString* wstr, int start, int len) {
-  UString ret;
-  volatile VALUE vret;
+static VALUE
+unicode_wcswidth(int argc, VALUE* argv, VALUE obj)
+{
+  VALUE str;
+  VALUE cjk;
+  struct call call = { .cjk = 0 };
 
-  UniStr_alloc(&ret);
-  WStr_convertIntoUString2(wstr, start, len, &ret);
-  vret = ENC_(rb_str_new((char*)ret.str, ret.len));
-  UniStr_free(&ret);
-
-  return vret;
+  rb_scan_args(argc, argv, "11", &str, &cjk);
+  call.string = str;
+  call.cjk = RTEST(cjk);
+  return call_with_buffers(width_work, &call);
 }
 
-typedef struct _get_text_elements_param {
-  WString* wstr;
-  VALUE str;
-} get_text_elements_param;
-
-VALUE
-get_text_elements_internal(VALUE param_value)
+static VALUE
+element_string(struct call* call, int start, int length)
 {
-  get_text_elements_param* param = (get_text_elements_param*)param_value;
-  WString* wstr = param->wstr;
-  VALUE str = param->str;
-  int start_pos;
-  int block_p = rb_block_given_p();
-  volatile VALUE ret = str;
+  call->utf8.len = 0;
+  WStr_convertIntoUString2(&call->wide[0], start, length, &call->utf8);
+  return ENC_(rb_str_new((char*)call->utf8.str, call->utf8.len));
+}
 
-  if (!block_p)
-    ret = rb_ary_new();
+static VALUE
+text_elements_work(VALUE argument)
+{
+  struct call* call = (struct call*)argument;
+  int block_given = rb_block_given_p();
+  const WString* wstr;
+  VALUE elements;
+  int start_pos;
+
+  call->string = utf8_argument(call->string);
+  wstr = decode_into(call->string, &call->wide[0]);
+  UniStr_alloc(&call->utf8);
+  elements = block_given ? call->original : rb_ary_new();
   for (start_pos = 0; start_pos < wstr->len;) {
     int c0 = wstr->str[start_pos];
     int cat = get_gencat(c0);
@@ -971,11 +1039,7 @@ get_text_elements_internal(VALUE param_value)
     int j;
 
     if (cat == c_Mn || cat == c_Mc || cat == c_Me) {
-      volatile VALUE rstr = TO_(str, wstring_to_rstring(wstr, start_pos, length));
-      if (!block_p)
-        rb_ary_push(ret, rstr);
-      else
-        rb_yield(rstr);
+      deliver(elements, block_given, element_string(call, start_pos, length));
       start_pos++;
       continue;
     }
@@ -1007,47 +1071,24 @@ get_text_elements_internal(VALUE param_value)
         length++;
       }
       else {
-        volatile VALUE rstr = TO_(str, wstring_to_rstring(wstr, start_pos, length));
-        if (!block_p)
-          rb_ary_push(ret, rstr);
-        else
-          rb_yield(rstr);
+        deliver(elements, block_given, element_string(call, start_pos, length));
         length = 0;
         break;
       }
     }
-    if (length > 0) {
-      volatile VALUE rstr = TO_(str, wstring_to_rstring(wstr, start_pos, length));
-      if (!block_p)
-        rb_ary_push(ret, rstr);
-      else
-        rb_yield(rstr);
-    }
+    if (length > 0)
+      deliver(elements, block_given, element_string(call, start_pos, length));
     start_pos = j;
   }
-  return ret;
+  return elements;
 }
 
-VALUE
-get_text_elements_ensure(VALUE wstr_value)
-{
-  WString* wstr = (WString*)wstr_value;
-  WStr_free(wstr);
-  return Qnil;
-}
-
-VALUE
+static VALUE
 unicode_get_text_elements(VALUE obj, VALUE str)
 {
-  WString wstr;
-  get_text_elements_param param = { &wstr, str };
+  struct call call = { .string = str, .original = str };
 
-  str = utf8_argument(str);
-  WStr_allocWithUTF8L(&wstr, RSTRING_PTR(str), RSTRING_LEN(str));
-
-  return rb_ensure(get_text_elements_internal, (VALUE)&param,
-                   get_text_elements_ensure, (VALUE)&wstr);
-  /* wstr will be freed in get_text_elements_ensure() */
+  return call_with_buffers(text_elements_work, &call);
 }
 
 void
@@ -1060,6 +1101,10 @@ Init_unicode_native()
 #endif
 
   mUnicode = rb_define_module("Unicode");
+#ifdef UNICODE_FAULT_INJECTION
+  Init_unicode_fault_injection(mUnicode);
+#endif
+  check_mapping_lengths();
   build_bmp_index();
   build_composition_pairs();
 

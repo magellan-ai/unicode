@@ -7,16 +7,14 @@
 #include <stdlib.h>
 #include <string.h>
 #include "ustring.h"
+#include "allocation.h"
 
 UString*
 UniStr_alloc(UString* str)
 {
+  str->str = (unsigned char*)buffer_malloc(USTR_INITIAL_STRING_LEN);
   str->size = USTR_INITIAL_STRING_LEN;
   str->len = 0;
-  if ((str->str = (unsigned char*)malloc(USTR_INITIAL_STRING_LEN)) == NULL) {
-    str->size = 0;
-    return NULL;
-  }
 
   return str;
 }
@@ -24,13 +22,7 @@ UniStr_alloc(UString* str)
 UString*
 UniStr_enlarge(UString* str, int size)
 {
-  unsigned char* newptr;
-
-  if ((newptr = (unsigned char*)realloc(str->str, str->size + size))
-      == NULL) {
-    return NULL;
-  }
-  str->str = newptr;
+  str->str = (unsigned char*)buffer_realloc(str->str, str->size + size);
   str->size += size;
 
   return str;
@@ -41,7 +33,10 @@ UniStr_free(UString* str)
 {
   str->size = 0;
   str->len = 0;
-  free(str->str);
+  if (str->str) {
+    buffer_free(str->str);
+    str->str = NULL;
+  }
 }
 
 int
