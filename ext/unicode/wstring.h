@@ -17,19 +17,19 @@ extern "C" {
 
 typedef struct _WString {
   int* str;
-  int len;
-  int size;
+  long len;
+  long size;
 } WString;
 
 WString* WStr_alloc(WString* str);
-WString* WStr_allocWithUTF8L(WString* s, const char* u, int len);
-WString* WStr_enlarge(WString* str, int size);
+WString* WStr_allocWithUTF8L(WString* s, const char* u, long len);
+WString* WStr_enlarge(WString* str, long size);
 void WStr_free(WString* str);
-int WStr_addWChars(WString* s, const int* a, int len);
-int WStr_addWChar(WString* s, int a);
-int WStr_pushWString(WString* s, const WString* add);
+long WStr_addWChars(WString* s, const int* a, long len);
+long WStr_addWChar(WString* s, int a);
+long WStr_pushWString(WString* s, const WString* add);
 UString* WStr_convertIntoUString(WString* wstr, UString* ustr);
-UString* WStr_convertIntoUString2(WString* wstr, int start, int len, UString* ustr);
+UString* WStr_convertIntoUString2(WString* wstr, long start, long len, UString* ustr);
 
 #ifdef __cplusplus
 }

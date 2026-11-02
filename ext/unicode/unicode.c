@@ -386,8 +386,8 @@ build_composition_pairs(void)
 static WString*
 sort_canonical(WString* ustr)
 {
-  int i = 1;
-  int len = ustr->len;
+  long i = 1;
+  long len = ustr->len;
 
   if (len < 2) return ustr;
 
@@ -429,8 +429,8 @@ decompose_hangul(int ucs, int* l, int* v, int* t)
 static WString*
 decompose_internal(WString* ustr, WString* result)
 {
-  int i;
-  int len = ustr->len;
+  long i;
+  long len = ustr->len;
 
   for (i = 0; i < len; i++) {
     int ucs = ustr->str[i];
@@ -463,8 +463,8 @@ decompose_internal(WString* ustr, WString* result)
 static WString*
 decompose_safe_internal(WString* ustr, WString* result)
 {
-  int i;
-  int len = ustr->len;
+  long i;
+  long len = ustr->len;
 
   for (i = 0; i < len; i++) {
     int ucs = ustr->str[i];
@@ -497,8 +497,8 @@ decompose_safe_internal(WString* ustr, WString* result)
 static WString*
 decompose_compat_internal(WString* ustr, WString* result)
 {
-  int i;
-  int len = ustr->len;
+  long i;
+  long len = ustr->len;
 
   for (i = 0; i < len; i++) {
     int ucs = ustr->str[i];
@@ -549,12 +549,12 @@ compose_pair(unsigned int c1, unsigned int c2)
 static WString*
 compose_internal(WString* ustr, WString* result)
 {
-  int starterPos = 0;
+  long starterPos = 0;
   int starterCh;
-  int compPos = 1;
+  long compPos = 1;
   int lastClass;
-  int oldLen = ustr->len;
-  int decompPos;
+  long oldLen = ustr->len;
+  long decompPos;
 
   if (oldLen == 0) return result;
   starterCh = ustr->str[0];
@@ -594,8 +594,8 @@ compose_internal(WString* ustr, WString* result)
 static WString*
 upcase_internal(WString* str, WString* result)
 {
-  int i;
-  int len = str->len;
+  long i;
+  long len = str->len;
 
   for (i = 0; i < len; i++) {
     int ucs = str->str[i];
@@ -613,8 +613,8 @@ upcase_internal(WString* str, WString* result)
 static WString*
 downcase_internal(WString* str, WString* result)
 {
-  int i;
-  int len = str->len;
+  long i;
+  long len = str->len;
 
   for (i = 0; i < len; i++) {
     int ucs = str->str[i];
@@ -632,8 +632,8 @@ downcase_internal(WString* str, WString* result)
 static WString*
 capitalize_internal(WString* str,  WString* result)
 {
-  int i;
-  int len = str->len;
+  long i;
+  long len = str->len;
 
   if (len > 0) {
     const char* c = get_titlecase(str->str[0]);
@@ -738,8 +738,8 @@ static const struct transform_steps capitalize_steps = { capitalize_internal, 0,
 static int
 compare_codepoints(const WString* a, const WString* b)
 {
-  int i;
-  int shorter = a->len < b->len ? a->len : b->len;
+  long i;
+  long shorter = a->len < b->len ? a->len : b->len;
 
   for (i = 0; i < shorter; i++) {
     if (a->str[i] != b->str[i])
@@ -882,7 +882,7 @@ categories_work(VALUE argument)
   int block_given = rb_block_given_p();
   const WString* text;
   VALUE categories;
-  int i;
+  long i;
 
   call->string = utf8_argument(call->string);
   text = decode_into(call->string, &call->wide[0]);
@@ -913,8 +913,8 @@ width_work(VALUE argument)
 {
   struct call* call = (struct call*)argument;
   const WString* text;
-  int width = 0;
-  int i;
+  long width = 0;
+  long i;
 
   call->string = utf8_argument(call->string);
   text = decode_into(call->string, &call->wide[0]);
@@ -948,7 +948,7 @@ width_work(VALUE argument)
     else
       width++; /* Halfwidth or Neutral */
   }
-  return INT2FIX(width);
+  return LONG2NUM(width);
 }
 
 static VALUE
@@ -965,7 +965,7 @@ unicode_wcswidth(int argc, VALUE* argv, VALUE obj)
 }
 
 static VALUE
-element_string(struct call* call, int start, int length)
+element_string(struct call* call, long start, long length)
 {
   call->utf8.len = 0;
   WStr_convertIntoUString2(&call->wide[0], start, length, &call->utf8);
@@ -979,7 +979,7 @@ text_elements_work(VALUE argument)
   int block_given = rb_block_given_p();
   const WString* wstr;
   VALUE elements;
-  int start_pos;
+  long start_pos;
 
   call->string = utf8_argument(call->string);
   wstr = decode_into(call->string, &call->wide[0]);
@@ -988,8 +988,8 @@ text_elements_work(VALUE argument)
   for (start_pos = 0; start_pos < wstr->len;) {
     int c0 = wstr->str[start_pos];
     int cat = get_gencat(c0);
-    int length = 1;
-    int j;
+    long length = 1;
+    long j;
 
     if (cat == c_Mn || cat == c_Mc || cat == c_Me) {
       deliver(elements, block_given, element_string(call, start_pos, length));

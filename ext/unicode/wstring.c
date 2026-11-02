@@ -19,7 +19,7 @@ WStr_alloc(WString* str)
 }
 
 WString*
-WStr_enlarge(WString* str, int size)
+WStr_enlarge(WString* str, long size)
 {
   str->str = (int*)buffer_realloc(str->str, (str->size + size) * sizeof(int));
   str->size += size;
@@ -38,8 +38,8 @@ WStr_free(WString* str)
   }
 }
 
-int
-WStr_addWChars(WString* s, const int* a, int len)
+long
+WStr_addWChars(WString* s, const int* a, long len)
 {
   if (s->len + len >= s->size) {
     WStr_enlarge(s, len + WSTR_STRING_EXTEND_LEN);
@@ -50,7 +50,7 @@ WStr_addWChars(WString* s, const int* a, int len)
   return s->len;
 }
 
-int
+long
 WStr_addWChar(WString* s, int a)
 {
   if (s->len + 1 >= s->size) {
@@ -62,7 +62,7 @@ WStr_addWChar(WString* s, int a)
   return s->len;
 }
 
-int
+long
 WStr_pushWString(WString* s, const WString* add)
 {
   if (s->len + add->len >= s->size) {
@@ -75,9 +75,9 @@ WStr_pushWString(WString* s, const WString* add)
 }
 
 WString*
-WStr_allocWithUTF8L(WString* s, const char* in, int len)
+WStr_allocWithUTF8L(WString* s, const char* in, long len)
 {
-  int i;
+  long i;
   int u = 0;
   int rest = 0;
 
@@ -130,7 +130,7 @@ WStr_allocWithUTF8L(WString* s, const char* in, int len)
 UString*
 WStr_convertIntoUString(WString* wstr, UString* ustr)
 {
-  int i;
+  long i;
 
   for (i = 0; i < wstr->len; i++) {
     UniStr_addWChar(ustr, wstr->str[i]);
@@ -140,9 +140,9 @@ WStr_convertIntoUString(WString* wstr, UString* ustr)
 }
 
 UString*
-WStr_convertIntoUString2(WString* wstr, int start, int len, UString* ustr)
+WStr_convertIntoUString2(WString* wstr, long start, long len, UString* ustr)
 {
-  int i;
+  long i;
 
   for (i = start; i < wstr->len && i < start + len; i++) {
     UniStr_addWChar(ustr, wstr->str[i]);

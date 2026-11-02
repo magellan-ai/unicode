@@ -19,7 +19,7 @@ UniStr_alloc(UString* str)
 }
 
 UString*
-UniStr_enlarge(UString* str, int size)
+UniStr_enlarge(UString* str, long size)
 {
   str->str = (unsigned char*)buffer_realloc(str->str, str->size + size);
   str->size += size;
@@ -38,7 +38,7 @@ UniStr_free(UString* str)
   }
 }
 
-int
+long
 UniStr_addChar(UString* s, unsigned char a)
 {
   if (s->len + 1 >= s->size) {
@@ -50,7 +50,7 @@ UniStr_addChar(UString* s, unsigned char a)
   return s->len;
 }
 
-int
+long
 UniStr_addChar2(UString* s, unsigned char a1, unsigned char a2)
 {
   if (s->len + 2 >= s->size) {
@@ -63,7 +63,7 @@ UniStr_addChar2(UString* s, unsigned char a1, unsigned char a2)
   return s->len;
 }
 
-int
+long
 UniStr_addChar3(UString* s, unsigned char a1, unsigned char a2, unsigned char a3)
 {
   if (s->len + 3 >= s->size) {
@@ -77,7 +77,7 @@ UniStr_addChar3(UString* s, unsigned char a1, unsigned char a2, unsigned char a3
   return s->len;
 }
 
-int
+long
 UniStr_addChar4(UString* s, unsigned char a1, unsigned char a2,
 	      unsigned char a3, unsigned char a4)
 {
@@ -93,7 +93,7 @@ UniStr_addChar4(UString* s, unsigned char a1, unsigned char a2,
   return s->len;
 }
 
-int
+long
 UniStr_addChar5(UString* s, unsigned char a1, unsigned char a2,
 	      unsigned char a3, unsigned char a4, unsigned char a5)
 {
@@ -110,7 +110,7 @@ UniStr_addChar5(UString* s, unsigned char a1, unsigned char a2,
   return s->len;
 }
 
-int
+long
 UniStr_addChar6(UString* s, unsigned char a1, unsigned char a2,
 	      unsigned char a3, unsigned char a4,
 	      unsigned char a5, unsigned char a6)
@@ -129,7 +129,7 @@ UniStr_addChar6(UString* s, unsigned char a1, unsigned char a2,
   return s->len;
 }
 
-int
+long
 UniStr_addWChar(UString* ustr, unsigned int c)
 {
   if (c < 128) {         /* 0x0000-0x00FF */
