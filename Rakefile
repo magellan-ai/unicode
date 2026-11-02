@@ -22,10 +22,9 @@ namespace :spec do
     asan_runtime = `gcc -print-file-name=libasan.so`.strip
     abort 'spec:sanitized needs gcc and its libasan.so runtime (Linux); see CLAUDE.md for running it in Docker.' unless File.exist?(asan_runtime)
 
-    ENV['UNICODE_SANITIZE'] = '1'
-    Rake::Task[:clobber].invoke
-    Rake::Task[:compile].invoke
-    sh({ 'LD_PRELOAD' => asan_runtime, 'ASAN_OPTIONS' => 'detect_leaks=0' }, RbConfig.ruby, '-S', 'rspec')
+    sanitized = { 'UNICODE_SANITIZE' => '1' }
+    sh(sanitized, RbConfig.ruby, '-S', 'rake', 'clobber', 'compile')
+    sh(sanitized.merge('LD_PRELOAD' => asan_runtime, 'ASAN_OPTIONS' => 'detect_leaks=0'), RbConfig.ruby, '-S', 'rspec')
   ensure
     Rake::Task[:clobber].execute
   end
