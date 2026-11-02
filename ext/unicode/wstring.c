@@ -1,7 +1,6 @@
 /*
- * Simple wide string Library
- * Version 0.1
- * 1999 by yoshidam
+ * Simple wide string library
+ * By Yoshida Masato, 1999. See LICENSE.
  */
 
 #include <stdio.h>

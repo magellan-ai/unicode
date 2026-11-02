@@ -1,7 +1,6 @@
 /*
  * Simple string library
- * Version 0.2
- * 1999 by yoshidam
+ * By Yoshida Masato, 1999. See LICENSE.
  */
 
 #ifndef _USTRING_H

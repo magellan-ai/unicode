@@ -1,7 +1,6 @@
 /*
  * Simple wide string library
- * Version 0.1
- * 1999 by yoshidam
+ * By Yoshida Masato, 1999. See LICENSE.
  */
 
 #ifndef _WSTRING_H

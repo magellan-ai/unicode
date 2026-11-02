@@ -1,11 +1,6 @@
 /*
- * Unicode Library version 0.4.3
- * Aug  8, 2012: version 0.4
- * Oct 14, 2010: version 0.4
- * Feb 26, 2010: version 0.3
- * Dec 29, 2009: version 0.2
- * Nov 23, 1999 yoshidam
- *
+ * Unicode normalization, case mapping, and character properties for Ruby.
+ * Original library by Yoshida Masato, 1999-2013. See LICENSE.
  */
 
 #include "ruby.h"
